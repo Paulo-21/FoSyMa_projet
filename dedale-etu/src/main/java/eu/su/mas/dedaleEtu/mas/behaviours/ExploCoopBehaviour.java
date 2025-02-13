@@ -1,5 +1,7 @@
 package eu.su.mas.dedaleEtu.mas.behaviours;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 
@@ -47,7 +49,8 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 	private MapRepresentation myMap;
 
 	private List<String> list_agentNames;
-
+	private List<Couple<Location, Location>> knowledge;
+	private List<HashMap<String,Couple<Location, Location>>> last_agent_knowledge;
 /**
  * 
  * @param myagent reference to the agent we are adding this behaviour to
@@ -58,7 +61,8 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 		super(myagent);
 		this.myMap=myMap;
 		this.list_agentNames=agentNames;
-		
+		this.knowledge = new ArrayList<>();
+		this.last_agent_knowledge = new ArrayList<>();
 		
 	}
 
@@ -93,9 +97,15 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 			String nextNodeId=null;
 			Iterator<Couple<Location, List<Couple<Observation, String>>>> iter=lobs.iterator();
 			while(iter.hasNext()){
-				Location accessibleNode=iter.next().getLeft();
+				Couple<Location, List<Couple<Observation, String>>> next_obs = iter.next();
+				Location accessibleNode=next_obs.getLeft();
+				List<Couple<Observation, String>> list_obs = next_obs.getRight();
+				if (!list_obs.isEmpty()) {
+					System.out.println(list_obs.get(0));
+				}
 				boolean isNewNode=this.myMap.addNewNode(accessibleNode.getLocationId());
 				//the node may exist, but not necessarily the edge
+				System.out.print(accessibleNode);
 				if (myPosition.getLocationId()!=accessibleNode.getLocationId()) {
 					this.myMap.addEdge(myPosition.getLocationId(), accessibleNode.getLocationId());
 					if (nextNodeId==null && isNewNode) nextNodeId=accessibleNode.getLocationId();

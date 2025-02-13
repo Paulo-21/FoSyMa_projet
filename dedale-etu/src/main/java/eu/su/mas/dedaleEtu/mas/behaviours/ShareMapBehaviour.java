@@ -40,7 +40,7 @@ public class ShareMapBehaviour extends TickerBehaviour{
 	public ShareMapBehaviour(Agent a, long period,MapRepresentation mymap, List<String> receivers) {
 		super(a, period);
 		this.myMap=mymap;
-		this.receivers=receivers;	
+		this.receivers=receivers;
 	}
 
 	/**
