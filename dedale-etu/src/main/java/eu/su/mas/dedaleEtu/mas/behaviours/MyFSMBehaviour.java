@@ -5,6 +5,9 @@ import jade.core.AID;
 import jade.core.behaviours.FSMBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
 import jade.core.behaviours.SimpleBehaviour;
+import jade.domain.DFService;
+import jade.domain.FIPAAgentManagement.DFAgentDescription;
+import jade.domain.FIPAAgentManagement.SearchConstraints;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
@@ -48,10 +51,14 @@ public class MyFSMBehaviour extends FSMBehaviour {
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
         this.sharedmyMap = new SharedMapRepresentation();
-        
+        this.ressources = new HashMap();
+        this.ressources.put("Diamond", new HashMap());
+        this.ressources.put("Gold", new HashMap());
         this.list_agentNames = agentNames;
         this.agentSeen =  new Vector<>();
-        registerFirstState(new ObservationBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources), STATE_OBSERVE);
+        registerFirstState(new BroadCastBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources, this.list_agentNames), STATE_OBSERVE);
+
+        //registerFirstState(new ObservationBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources), STATE_OBSERVE);
         registerState(new CommunicateBehaviour(myagent, this.agentSeen, this.ressources), STATE_COMMUNICATE);
         registerState(new ExploreBehaviour(myagent, this.sharedmyMap, this.list_agentNames, ressources), STATE_EXPLORE);
 
@@ -71,13 +78,18 @@ public class MyFSMBehaviour extends FSMBehaviour {
 
 		private int exitValue;
         private List<Couple<Location, String>> agentSeen;
+        private List<String> list_agentNames;
         private HashMap<String, HashMap<Location, Integer>> ressources;
         private SharedMapRepresentation myMap;
-        public BroadCastBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, List<Couple<Location, String>> list,HashMap<String, HashMap<Location, Integer>> ressources ) {
+        private ArrayList<String> knowledge;
+        private HashMap<String, Integer> last_talk_knowlege;
+        public BroadCastBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, List<Couple<Location, String>> list,HashMap<String, HashMap<Location, Integer>> ressources, List<String> agentNames ) {
         	super(myagent);
         	this.ressources = ressources;
         	this.agentSeen = list;
         	this.myMap = map;
+        	this.list_agentNames = agentNames;
+        	this.knowledge = new ArrayList<String>();
         }
         
         public void action() {
@@ -86,26 +98,82 @@ public class MyFSMBehaviour extends FSMBehaviour {
     		msg.setProtocol("ShareMap");
     		msg.setSender(this.myAgent.getAID());
     		msg.setContent("H");
-    		
-    		((AbstractDedaleAgent)this.myAgent).sendMessage(msg);
-            // Initialize the map if not already created
+    		for (String agentName : this.list_agentNames) {
+    			msg.addReceiver(new AID(agentName,AID.ISLOCALNAME));
+    		}
+    		myAgent.sendMessage(msg);
+    		MapRepresentation theMap = this.myMap.getMyMap();
+            Location myPosition = myAgent.getCurrentPosition();
+            if (myPosition != null) {
+                // Get the list of observable nodes from the current position
+                List<Couple<Location, List<Couple<Observation, String>>>> lobs = myAgent.observe();
+
+                // 1️° Mark the current position as explored
+                theMap.addNode(myPosition.getLocationId(), MapAttribute.closed);
+                // 2️° Check surrounding nodes and update the map
+                String nextNodeId = null;
+                for (Couple<Location, List<Couple<Observation, String>>> couple : lobs) {
+                    Location accessibleNode = couple.getLeft();
+                    boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
+                    if (isNewNode) {
+                    	StringBuilder builder = new StringBuilder("E");
+                    	builder.append(myPosition.toString());
+                    	builder.append(" ");
+                    	builder.append(accessibleNode.toString());
+                    	this.knowledge.add(builder.toString());
+                    }
+                    List<Couple<Observation, String>> observation = couple.getRight();
+                    for (Couple<Observation,String> o : observation) {
+                    	Observation obs_names = o.getLeft();
+                    	String obs_value = o.getRight();
+                    	if (obs_names == Observation.GOLD) {
+                    		HashMap<Location, Integer> d = this.ressources.get("Gold");
+                    		d.put(myPosition, Integer.parseInt(obs_value));
+                    	} 
+                    	else if (obs_names == Observation.DIAMOND) {
+                    		HashMap<Location, Integer> d = this.ressources.get("Diamond");
+                    		d.put(myPosition, Integer.parseInt(obs_value));
+                    	}
+                    }
+                    // Ensure we do not mark the current position as an edge node
+                    if (!myPosition.getLocationId().equals(accessibleNode.getLocationId())) {
+                    	theMap.addEdge(myPosition.getLocationId(), accessibleNode.getLocationId());
+
+                        // Select the first unexplored directly reachable node
+                        if (nextNodeId == null && isNewNode) {
+                            nextNodeId = accessibleNode.getLocationId();
+                        }
+                    }
+                }
+            }
+    		System.out.println("Hell");
             try {
-                myAgent.doWait(50);
+                myAgent.doWait(500);
             } catch (Exception e) {
                 e.printStackTrace();
             }
+            System.out.println("Hello");
             MessageTemplate template= MessageTemplate.and(
             MessageTemplate.MatchProtocol("ShareMap"),
             	MessageTemplate.MatchPerformative(ACLMessage.INFORM)
             );
-            	// takes the message if the template is verified
             ACLMessage msgr = new ACLMessage(ACLMessage.INFORM);
-            while (msgr!=null) {
+            while (true) {
             	msgr=this.myAgent.receive(template);
+            	if (msgr == null) {
+            		break;
+            	}
+            	AID id = msgr.getSender();
             	// Processing of the message
-            	String textMessage=msgr.getContent();
-            	
+            	String textMessage = msgr.getContent();
+            	/*ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
+            	msgrespond.setProtocol("ShareMap");
+            	msgrespond.setSender(this.myAgent.getAID());
+        		msgrespond.addReceiver(id);
+        		msgrespond.setContent("Heelee");
+        		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);*/
             }
+            exitValue = 2;
         }
 
         @Override
@@ -313,8 +381,26 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 }
                 // 5️⃣ Move to the next selected node
                 System.out.println(myAgent.getLocalName() + " moving to: " + nextNodeId);
-                myAgent.moveTo(new GsLocation(nextNodeId));
 
+                /*MessageTemplate template= MessageTemplate.and(
+                        MessageTemplate.MatchProtocol("ShareMap"),
+                        	MessageTemplate.MatchPerformative(ACLMessage.INFORM)
+                        );
+                ACLMessage msgr = new ACLMessage(ACLMessage.INFORM);
+                while (msgr!=null) {
+                	msgr=this.myAgent.receive(template);
+                	AID id = msgr.getSender();
+                	// Processing of the message
+                	String textMessage = msgr.getContent();
+                	ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
+                	msgrespond.setProtocol("ShareMap");
+                	msgrespond.setSender(this.myAgent.getAID());
+            		msgrespond.addReceiver(id);
+            		msgrespond.setContent("Heelee");
+            		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
+                }*/
+                myAgent.moveTo(new GsLocation(nextNodeId));
+                
                 exitValue = 3; // Continue back to OBSERVE state
             }
         }
