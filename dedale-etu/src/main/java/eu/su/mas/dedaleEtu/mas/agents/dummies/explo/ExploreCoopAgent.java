@@ -7,6 +7,7 @@ import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import eu.su.mas.dedale.mas.agent.behaviours.platformManagment.*;
 
 import eu.su.mas.dedaleEtu.mas.behaviours.ExploCoopBehaviour;
+import eu.su.mas.dedaleEtu.mas.behaviours.MyFSMBehaviour;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 
 import jade.core.behaviours.Behaviour;
@@ -55,7 +56,7 @@ public class ExploreCoopAgent extends AbstractDedaleAgent {
 		
 		List<String> list_agentNames=new ArrayList<String>();
 		
-		if(args.length==0){
+		if(args.length==0) {
 			System.err.println("Error while creating the agent, names of agent to contact expected");
 			System.exit(-1);
 		}else{
@@ -74,9 +75,9 @@ public class ExploreCoopAgent extends AbstractDedaleAgent {
 		 * 
 		 ************************************************/
 		
-		lb.add(new ExploCoopBehaviour(this,this.myMap,list_agentNames));
+		//lb.add(new ExploCoopBehaviour(this,this.myMap,list_agentNames));
+		lb.add(new MyFSMBehaviour(this,this.myMap,list_agentNames));
 
-		
 		
 		/***
 		 * MANDATORY TO ALLOW YOUR AGENT TO BE DEPLOYED CORRECTLY

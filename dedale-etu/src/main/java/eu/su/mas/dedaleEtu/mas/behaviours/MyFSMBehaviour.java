@@ -1,7 +1,10 @@
 package eu.su.mas.dedaleEtu.mas.behaviours;
 
+import jade.core.behaviours.DataStore;
+import jade.core.AID;
 import jade.core.behaviours.FSMBehaviour;
 import jade.core.behaviours.OneShotBehaviour;
+import jade.core.behaviours.SimpleBehaviour;
 import jade.lang.acl.ACLMessage;
 import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
@@ -13,8 +16,15 @@ import eu.su.mas.dedale.env.gs.GsLocation;
 import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation.MapAttribute;
+import eu.su.mas.dedaleEtu.mas.knowledge.SharedMapRepresentation;
+import eu.su.mas.dedaleEtu.mas.behaviours.ExploCoopBehaviour;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Vector;
 
 /**
  * This FSM behavior manages the agent's cooperative exploration in a structured manner.
@@ -30,24 +40,79 @@ public class MyFSMBehaviour extends FSMBehaviour {
     private static final String STATE_COMMUNICATE = "COMMUNICATE";
     private static final String STATE_EXPLORE = "EXPLORE";
 
-    private MapRepresentation myMap;
+    private SharedMapRepresentation sharedmyMap;
     private List<String> list_agentNames;
+    private List<Couple<Location, String>> agentSeen;
+    private HashMap<String, HashMap<Location, Integer>> ressources;
 
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
-        this.myMap = myMap;
+        this.sharedmyMap = new SharedMapRepresentation();
+        
         this.list_agentNames = agentNames;
-
-        // Register FSM states
-        registerFirstState(new ObserveBehaviour(), STATE_OBSERVE);
-        registerState(new CommunicateBehaviour(), STATE_COMMUNICATE);
-        registerState(new ExploreBehaviour(), STATE_EXPLORE);
+        this.agentSeen =  new Vector<>();
+        registerFirstState(new ObservationBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources), STATE_OBSERVE);
+        registerState(new CommunicateBehaviour(myagent, this.agentSeen, this.ressources), STATE_COMMUNICATE);
+        registerState(new ExploreBehaviour(myagent, this.sharedmyMap, this.list_agentNames, ressources), STATE_EXPLORE);
 
         // Define state transitions
         registerTransition(STATE_OBSERVE, STATE_COMMUNICATE, 1);  
         registerTransition(STATE_OBSERVE, STATE_EXPLORE, 2);  
         registerTransition(STATE_COMMUNICATE, STATE_EXPLORE, 2);  
         registerTransition(STATE_EXPLORE, STATE_OBSERVE, 3);  // when agent finished explore, it goes back to the observe state
+
+    }
+    
+    private class BroadCastBehaviour extends OneShotBehaviour {
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = 8120255717271441691L;
+
+		private int exitValue;
+        private List<Couple<Location, String>> agentSeen;
+        private HashMap<String, HashMap<Location, Integer>> ressources;
+        private SharedMapRepresentation myMap;
+        public BroadCastBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, List<Couple<Location, String>> list,HashMap<String, HashMap<Location, Integer>> ressources ) {
+        	super(myagent);
+        	this.ressources = ressources;
+        	this.agentSeen = list;
+        	this.myMap = map;
+        }
+        
+        public void action() {
+            AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
+            ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+    		msg.setProtocol("ShareMap");
+    		msg.setSender(this.myAgent.getAID());
+    		msg.setContent("H");
+    		
+    		((AbstractDedaleAgent)this.myAgent).sendMessage(msg);
+            // Initialize the map if not already created
+            try {
+                myAgent.doWait(50);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            MessageTemplate template= MessageTemplate.and(
+            MessageTemplate.MatchProtocol("ShareMap"),
+            	MessageTemplate.MatchPerformative(ACLMessage.INFORM)
+            );
+            	// takes the message if the template is verified
+            ACLMessage msgr = new ACLMessage(ACLMessage.INFORM);
+            while (msgr!=null) {
+            	msgr=this.myAgent.receive(template);
+            	// Processing of the message
+            	String textMessage=msgr.getContent();
+            	
+            }
+        }
+
+        @Override
+        public int onEnd() {
+            return this.exitValue;
+        }
+
     }
 
     /** 
@@ -58,81 +123,66 @@ public class MyFSMBehaviour extends FSMBehaviour {
      * Observation state: The agent scans the surrounding environment, updates the map,
      * and decides whether to communicate or explore.
      */
-    private class ObserveBehaviour extends OneShotBehaviour {
-        private int exitValue;
-
+    private class ObservationBehaviour extends OneShotBehaviour {
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = 8430689706443796558L;
+		private int exitValue;
+        private List<Couple<Location, String>> agentSeen;
+        private HashMap<String, HashMap<Location, Integer>> ressources;
+        private SharedMapRepresentation myMap;
+        public ObservationBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, List<Couple<Location, String>> list,HashMap<String, HashMap<Location, Integer>> ressources ) {
+        	super(myagent);
+        	this.ressources = ressources;
+        	this.agentSeen = list;
+        	this.myMap = map;
+        }
+        
         public void action() {
+        	System.out.println("hejzedoj");
             AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
-
             // Initialize the map if not already created
-            if (myMap == null) {
-                myMap = new MapRepresentation();
-                myAgent.addBehaviour(new ShareMapBehaviour(myAgent, 500, myMap, list_agentNames));
+            try {
+                myAgent.doWait(500);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-
+            boolean agentDetected = false;
             // Retrieve the current position
             Location myPosition = myAgent.getCurrentPosition();
             if (myPosition != null) {
                 // Get the observable surrounding nodes
                 List<Couple<Location, List<Couple<Observation, String>>>> lobs = myAgent.observe();
-
-                // Introduce a small delay for debugging purposes
-                try {
-                    myAgent.doWait(1000);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                // Mark the current node as explored
-                myMap.addNode(myPosition.getLocationId(), MapAttribute.closed);
-
-                // Process neighboring nodes
-                boolean agentDetected = false;
-                boolean explorationFinished = false;
-                String nextNodeId = null;
-
-                for (Couple<Location, List<Couple<Observation, String>>> couple : lobs) {
-                    Location accessibleNode = couple.getLeft();
-                    List<Couple<Observation, String>> observations = couple.getRight();
-
-                    // Check if there is another agent in the observed area
-                    for (Couple<Observation, String> obs : observations) {
-                        if (obs.getLeft().equals(Observation.AGENTNAME)) {
-                            System.out.println(myAgent.getLocalName() + " detected another agent: " + obs.getRight());
-                            agentDetected = true;
-                            break;
-                        }
-                    }
-
-                    // Update map with new nodes
-                    boolean isNewNode = myMap.addNewNode(accessibleNode.getLocationId());
-                    if (!myPosition.getLocationId().equals(accessibleNode.getLocationId())) {
-                        myMap.addEdge(myPosition.getLocationId(), accessibleNode.getLocationId());
-                        if (nextNodeId == null && isNewNode) nextNodeId = accessibleNode.getLocationId();
-                    }
-                }
-
-                // If all nodes have been explored, stop the exploration behavior but do not delete the agent
-                if (!myMap.hasOpenNode()) {
-                    explorationFinished = true;
-                    System.out.println(this.myAgent.getLocalName() + " - Exploration successfully done, stopping exploration.");
-                }
-
-                // Decide the next state: Communicate if an agent was found, otherwise explore (unless exploration is done)
-                if (explorationFinished) {
-                    exitValue = 3;  // Stay in OBSERVE state (or another state for idle waiting, if necessary 
-                } else if (agentDetected) {
-                    exitValue = 1;  // Move to COMMUNICATE state
-                } else {
-                    exitValue = 2;  // Move to EXPLORE state
-                }
+                Iterator<Couple<Location, List<Couple<Observation, String>>>> iter=lobs.iterator();
+    			while(iter.hasNext()){
+    				Couple<Location, List<Couple<Observation, String>>> next_obs = iter.next();
+    				Location accessibleNode=next_obs.getLeft();
+    				List<Couple<Observation, String>> list_obs = next_obs.getRight();
+    				Iterator<Couple<Observation,String>> iter_obs_next = list_obs.iterator();
+    				while(iter_obs_next.hasNext()) {
+    					Couple<Observation, String> couple = iter_obs_next.next();
+    					Observation obs = couple.getLeft();
+    					String Value = couple.getRight();
+    					if (obs == Observation.AGENTNAME) {
+    						agentDetected = true;
+    						this.agentSeen.add(new Couple(accessibleNode, obs.toString()));
+    					}
+    				}
+    			}
             }
+                if (agentDetected) {
+                    this.exitValue = 1;  // Move to COMMUNICATE state
+                } else {
+                    this.exitValue = 2;  // Move to EXPLORE state
+                }
         }
 
         @Override
         public int onEnd() {
-            return exitValue;
+            return this.exitValue;
         }
+
     }
 
     /**
@@ -140,19 +190,39 @@ public class MyFSMBehaviour extends FSMBehaviour {
      * and merges the received maps.
      */
     private class CommunicateBehaviour extends OneShotBehaviour {
-        private int exitValue;
-        // just an example with gpt, will be replaced with our method
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = 7254034391860846188L;
+		private int exitValue;
+        private List<Couple<Location, String>> agentSeen;
+        private HashMap<String, HashMap<Location, Integer>> ressources;
         
+        public CommunicateBehaviour(final AbstractDedaleAgent myagent, List<Couple<Location, String>> list, HashMap<String, HashMap<Location, Integer>> ressources) {
+        	super(myagent);
+        	this.ressources = ressources;
+        	this.agentSeen = list;
+        }
         public void action() {
-        	/** just an example by gpt, will be replaced by our methode
+        	System.out.println("Communicate");
+        	ACLMessage msg=new ACLMessage(ACLMessage.INFORM);//FIPA
+        	msg.setSender( this .myAgent.getAID());
+        	msg.setProtocol("SHARE-TOPO");
+        	msg.setContent("Hello World");
+        	
+        	msg.addReceiver(new AID(this.agentSeen.get(0).getRight(),AID.ISLOCALNAME));
+        	//msg.addReceiver(new AID("ReceiverName2",AID.ISLOCALNAME));
+        	((AbstractDedaleAgent) this.myAgent).sendMessage(msg);
+        	
+        	// just an example by gpt, will be replaced by our methode
             // Listen for shared topology messages
-            MessageTemplate msgTemplate = MessageTemplate.and(
+            /*MessageTemplate msgTemplate = MessageTemplate.and(
                     MessageTemplate.MatchProtocol("SHARE-TOPO"),
                     MessageTemplate.MatchPerformative(ACLMessage.INFORM));
             ACLMessage msgReceived = this.myAgent.receive(msgTemplate);
 
             // If a message is received, merge the map
-            if (msgReceived != null) {
+            /*if (msgReceived != null) {
                 try {
                     SerializableSimpleGraph<String, MapAttribute> sgreceived =
                             (SerializableSimpleGraph<String, MapAttribute>) msgReceived.getContentObject();
@@ -161,8 +231,8 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 } catch (UnreadableException e) {
                     e.printStackTrace();
                 }
-            }
-            */
+            }*/
+            
             exitValue = 2;  // Directly transition to EXPLORE instead of returning to OBSERVE
         }
 
@@ -170,6 +240,8 @@ public class MyFSMBehaviour extends FSMBehaviour {
         public int onEnd() {
             return exitValue;
         }
+		
+        
     }
 
     /**
@@ -177,9 +249,27 @@ public class MyFSMBehaviour extends FSMBehaviour {
      * following the shortest path.
      */
     private class ExploreBehaviour extends OneShotBehaviour {
-        private int exitValue;
-
+        /**
+		 * 
+		 */
+		private static final long serialVersionUID = -3794632052972440256L;
+		private int exitValue;
+        private SharedMapRepresentation myMap;
+        private HashMap<String, HashMap<Location, Integer>> ressources;
+        private List<String> list_agentNames;
+        
+        public ExploreBehaviour (final AbstractDedaleAgent myagent, SharedMapRepresentation myMap,List<String> agentNames, HashMap<String, HashMap<Location, Integer>> ressources) {
+        	super(myagent);
+        	
+        	this.ressources = ressources;
+        	this.myMap = myMap;
+        	this.list_agentNames = agentNames;
+        }
         public void action() {
+        	MapRepresentation theMap = this.myMap.getMyMap();
+        	
+        	System.out.println("Explor");
+        	
             AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
             Location myPosition = myAgent.getCurrentPosition();
 
@@ -188,21 +278,21 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 List<Couple<Location, List<Couple<Observation, String>>>> lobs = myAgent.observe();
                 // Introduce a small delay for debugging purposes
                 try {
-                    myAgent.doWait(1000);
+                   //myAgent.doWait(500);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                // 1️⃣ Mark the current position as explored
-                myMap.addNode(myPosition.getLocationId(), MapAttribute.closed);
-                // 2️⃣ Check surrounding nodes and update the map
+                // 1️° Mark the current position as explored
+                theMap.addNode(myPosition.getLocationId(), MapAttribute.closed);
+                // 2️° Check surrounding nodes and update the map
                 String nextNodeId = null;
                 for (Couple<Location, List<Couple<Observation, String>>> couple : lobs) {
                     Location accessibleNode = couple.getLeft();
-                    boolean isNewNode = myMap.addNewNode(accessibleNode.getLocationId());
+                    boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
 
                     // Ensure we do not mark the current position as an edge node
                     if (!myPosition.getLocationId().equals(accessibleNode.getLocationId())) {
-                        myMap.addEdge(myPosition.getLocationId(), accessibleNode.getLocationId());
+                    	theMap.addEdge(myPosition.getLocationId(), accessibleNode.getLocationId());
 
                         // Select the first unexplored directly reachable node
                         if (nextNodeId == null && isNewNode) {
@@ -210,8 +300,8 @@ public class MyFSMBehaviour extends FSMBehaviour {
                         }
                     }
                 }
-                // 3️⃣ Check if the exploration is complete
-                if (!myMap.hasOpenNode()) {
+                // 3️° Check if the exploration is complete
+                if (!theMap.hasOpenNode()) {
                     System.out.println(this.myAgent.getLocalName() + " - Exploration successfully completed.");
                     myAgent.doDelete();
                     return;
@@ -219,7 +309,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 // 4️⃣ Select the next node to move to
                 if (nextNodeId == null) {
                     // No directly accessible unexplored node, compute the shortest path to the closest open node
-                    nextNodeId = myMap.getShortestPathToClosestOpenNode(myPosition.getLocationId()).get(0);
+                    nextNodeId = theMap.getShortestPathToClosestOpenNode(myPosition.getLocationId()).get(0);
                 }
                 // 5️⃣ Move to the next selected node
                 System.out.println(myAgent.getLocalName() + " moving to: " + nextNodeId);

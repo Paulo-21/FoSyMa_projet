@@ -146,7 +146,7 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 					}
 					this.myMap.mergeMap(sgreceived);
 				}
-
+				System.out.println(this.finished);
 				((AbstractDedaleAgent)this.myAgent).moveTo(new GsLocation(nextNodeId));
 			}
 
