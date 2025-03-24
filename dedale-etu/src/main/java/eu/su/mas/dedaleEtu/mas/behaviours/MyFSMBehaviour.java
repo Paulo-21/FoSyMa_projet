@@ -45,8 +45,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
 
     private SharedMapRepresentation sharedmyMap;
     private List<String> list_agentNames;
-    private List<Couple<Location, String>> agentSeen;
-    private HashMap<String, HashMap<Location, Integer>> ressources;
+    private HashMap<String, HashMap<String, Integer>> ressources;
+    private ArrayList<String> knowledge;
+    private HashMap<String, Integer> last_talk_knowlege;
 
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
@@ -55,12 +56,16 @@ public class MyFSMBehaviour extends FSMBehaviour {
         this.ressources.put("Diamond", new HashMap());
         this.ressources.put("Gold", new HashMap());
         this.list_agentNames = agentNames;
-        this.agentSeen =  new Vector<>();
-        registerFirstState(new BroadCastBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources, this.list_agentNames), STATE_OBSERVE);
+        this.knowledge = new ArrayList<String>();
+        this.last_talk_knowlege = new HashMap();
+        
+        for (String name : agentNames) { this.last_talk_knowlege.put(name, -1); }
+        
+        registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames), STATE_OBSERVE);
 
         //registerFirstState(new ObservationBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources), STATE_OBSERVE);
-        registerState(new CommunicateBehaviour(myagent, this.agentSeen, this.ressources), STATE_COMMUNICATE);
-        registerState(new ExploreBehaviour(myagent, this.sharedmyMap, this.list_agentNames, ressources), STATE_EXPLORE);
+        
+        registerState(new ExploreBehaviour(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge), STATE_EXPLORE);
 
         // Define state transitions
         registerTransition(STATE_OBSERVE, STATE_COMMUNICATE, 1);  
@@ -77,19 +82,19 @@ public class MyFSMBehaviour extends FSMBehaviour {
 		private static final long serialVersionUID = 8120255717271441691L;
 
 		private int exitValue;
-        private List<Couple<Location, String>> agentSeen;
         private List<String> list_agentNames;
-        private HashMap<String, HashMap<Location, Integer>> ressources;
+        private HashMap<String, HashMap<String, Integer>> ressources;
         private SharedMapRepresentation myMap;
         private ArrayList<String> knowledge;
         private HashMap<String, Integer> last_talk_knowlege;
-        public BroadCastBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, List<Couple<Location, String>> list,HashMap<String, HashMap<Location, Integer>> ressources, List<String> agentNames ) {
+        
+        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames ) {
         	super(myagent);
         	this.ressources = ressources;
-        	this.agentSeen = list;
         	this.myMap = map;
         	this.list_agentNames = agentNames;
-        	this.knowledge = new ArrayList<String>();
+        	this.knowledge = knowledge;
+        	this.last_talk_knowlege = last_talk_knowlege;
         }
         
         public void action() {
@@ -117,9 +122,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
                     if (isNewNode) {
                     	StringBuilder builder = new StringBuilder("E");
-                    	builder.append(myPosition.toString());
+                    	builder.append(myPosition);
                     	builder.append(" ");
-                    	builder.append(accessibleNode.toString());
+                    	builder.append(accessibleNode);
                     	this.knowledge.add(builder.toString());
                     }
                     List<Couple<Observation, String>> observation = couple.getRight();
@@ -127,12 +132,17 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     	Observation obs_names = o.getLeft();
                     	String obs_value = o.getRight();
                     	if (obs_names == Observation.GOLD) {
-                    		HashMap<Location, Integer> d = this.ressources.get("Gold");
-                    		d.put(myPosition, Integer.parseInt(obs_value));
+                    		HashMap<String, Integer> d = this.ressources.get("Gold");
+                    		d.put(myPosition.toString(), Integer.parseInt(obs_value));
+                    		StringBuilder builder = new StringBuilder("G");
+                    		builder.append(accessibleNode.toString());
+                    		builder.append(" ");
+                    		builder.append(obs_value);
+                        	this.knowledge.add(builder.toString());
                     	} 
                     	else if (obs_names == Observation.DIAMOND) {
-                    		HashMap<Location, Integer> d = this.ressources.get("Diamond");
-                    		d.put(myPosition, Integer.parseInt(obs_value));
+                    		HashMap<String, Integer> d = this.ressources.get("Diamond");
+                    		d.put(myPosition.toString(), Integer.parseInt(obs_value));
                     	}
                     }
                     // Ensure we do not mark the current position as an edge node
@@ -146,13 +156,12 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     }
                 }
             }
-    		System.out.println("Hell");
             try {
                 myAgent.doWait(500);
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            System.out.println("Hello");
+            
             MessageTemplate template= MessageTemplate.and(
             MessageTemplate.MatchProtocol("ShareMap"),
             	MessageTemplate.MatchPerformative(ACLMessage.INFORM)
@@ -166,16 +175,61 @@ public class MyFSMBehaviour extends FSMBehaviour {
             	AID id = msgr.getSender();
             	// Processing of the message
             	String textMessage = msgr.getContent();
-            	/*ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
+            	this.parse_and_learnknowlege(textMessage);
+            	String diff_knowledge = this.get_unknow_knowledge(id.getLocalName());
+            	ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
             	msgrespond.setProtocol("ShareMap");
             	msgrespond.setSender(this.myAgent.getAID());
         		msgrespond.addReceiver(id);
-        		msgrespond.setContent("Heelee");
-        		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);*/
+        		msgrespond.setContent(diff_knowledge);
+        		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
             }
             exitValue = 2;
         }
-
+        private String get_unknow_knowledge(String agentname) {
+        	StringBuilder builder = new StringBuilder();
+        	int i = this.knowledge.size();
+        	int last = this.last_talk_knowlege.get(agentname);
+        	for (String k : this.knowledge.reversed()) {
+        		if (i == last) {
+        			break;
+        		}
+        		builder.append(k);
+        		builder.append(',');
+        		i--;
+        	}
+        	this.last_talk_knowlege.put(agentname, i);
+        	return builder.toString();
+        }
+        private void parse_and_learnknowlege(String sharemap_result) {
+        	MapRepresentation theMap = this.myMap.getMyMap();
+        	String[] myArray = sharemap_result.split(",");
+        	for (String s : myArray) {
+        	  if (s.charAt(0) == 'E') {
+        		  String e = s.substring(1);
+        		  String[] slp = e.split(" ");
+        		  theMap.addNewNode(slp[0]);
+        		  theMap.addNewNode(slp[1]);
+        		  theMap.addEdge(slp[0], slp[1]);
+        	  }
+        	  else if (s.charAt(0) == 'G') {
+        		  String[] spl = s.substring(1).split(" ");
+        		  String location = spl[0];
+        		  String value = spl[1];
+        		  if (this.ressources.get("Gold").get(location) > Integer.parseInt(value)) {
+        			  this.ressources.get("Gold").put(location, Integer.parseInt(value));
+        		  }
+        	  }
+        	  else if (s.charAt(0) == 'D') {
+        		  String[] spl = s.substring(1).split(" ");
+        		  String location = spl[0];
+        		  String value = spl[1];
+        		  if (this.ressources.get("Diamond").get(location) > Integer.parseInt(value)) {
+        			  this.ressources.get("Diamond").put(location, Integer.parseInt(value));
+        		  }
+        	  }
+        	}
+        }
         @Override
         public int onEnd() {
             return this.exitValue;
@@ -200,10 +254,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private List<Couple<Location, String>> agentSeen;
         private HashMap<String, HashMap<Location, Integer>> ressources;
         private SharedMapRepresentation myMap;
-        public ObservationBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, List<Couple<Location, String>> list,HashMap<String, HashMap<Location, Integer>> ressources ) {
+        public ObservationBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, HashMap<String, HashMap<Location, Integer>> ressources ) {
         	super(myagent);
         	this.ressources = ressources;
-        	this.agentSeen = list;
         	this.myMap = map;
         }
         
@@ -257,61 +310,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
      * Communication state: The agent listens for map-sharing messages from other agents
      * and merges the received maps.
      */
-    private class CommunicateBehaviour extends OneShotBehaviour {
-        /**
-		 * 
-		 */
-		private static final long serialVersionUID = 7254034391860846188L;
-		private int exitValue;
-        private List<Couple<Location, String>> agentSeen;
-        private HashMap<String, HashMap<Location, Integer>> ressources;
-        
-        public CommunicateBehaviour(final AbstractDedaleAgent myagent, List<Couple<Location, String>> list, HashMap<String, HashMap<Location, Integer>> ressources) {
-        	super(myagent);
-        	this.ressources = ressources;
-        	this.agentSeen = list;
-        }
-        public void action() {
-        	System.out.println("Communicate");
-        	ACLMessage msg=new ACLMessage(ACLMessage.INFORM);//FIPA
-        	msg.setSender( this .myAgent.getAID());
-        	msg.setProtocol("SHARE-TOPO");
-        	msg.setContent("Hello World");
-        	
-        	msg.addReceiver(new AID(this.agentSeen.get(0).getRight(),AID.ISLOCALNAME));
-        	//msg.addReceiver(new AID("ReceiverName2",AID.ISLOCALNAME));
-        	((AbstractDedaleAgent) this.myAgent).sendMessage(msg);
-        	
-        	// just an example by gpt, will be replaced by our methode
-            // Listen for shared topology messages
-            /*MessageTemplate msgTemplate = MessageTemplate.and(
-                    MessageTemplate.MatchProtocol("SHARE-TOPO"),
-                    MessageTemplate.MatchPerformative(ACLMessage.INFORM));
-            ACLMessage msgReceived = this.myAgent.receive(msgTemplate);
-
-            // If a message is received, merge the map
-            /*if (msgReceived != null) {
-                try {
-                    SerializableSimpleGraph<String, MapAttribute> sgreceived =
-                            (SerializableSimpleGraph<String, MapAttribute>) msgReceived.getContentObject();
-                    myMap.mergeMap(sgreceived);
-                    System.out.println(this.myAgent.getLocalName() + " merged the received map.");
-                } catch (UnreadableException e) {
-                    e.printStackTrace();
-                }
-            }*/
-            
-            exitValue = 2;  // Directly transition to EXPLORE instead of returning to OBSERVE
-        }
-
-        @Override
-        public int onEnd() {
-            return exitValue;
-        }
-		
-        
-    }
-
+    
     /**
      * Exploration state: The agent moves to the closest unexplored node,
      * following the shortest path.
@@ -323,21 +322,21 @@ public class MyFSMBehaviour extends FSMBehaviour {
 		private static final long serialVersionUID = -3794632052972440256L;
 		private int exitValue;
         private SharedMapRepresentation myMap;
-        private HashMap<String, HashMap<Location, Integer>> ressources;
+        private HashMap<String, HashMap<String, Integer>> ressources;
         private List<String> list_agentNames;
-        
-        public ExploreBehaviour (final AbstractDedaleAgent myagent, SharedMapRepresentation myMap,List<String> agentNames, HashMap<String, HashMap<Location, Integer>> ressources) {
+        private ArrayList<String> knowledge;
+        private HashMap<String, Integer> last_talk_knowlege;
+
+        public ExploreBehaviour (final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation myMap, List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, ArrayList<String> knowledge) {
         	super(myagent);
-        	
         	this.ressources = ressources;
         	this.myMap = myMap;
-        	this.list_agentNames = agentNames;
+        	this.knowledge = knowledge;
+        	this.last_talk_knowlege = last_talk_knowlege;
+        	this.list_agentNames = list_agentNames;
         }
         public void action() {
         	MapRepresentation theMap = this.myMap.getMyMap();
-        	
-        	System.out.println("Explor");
-        	
             AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
             Location myPosition = myAgent.getCurrentPosition();
 
@@ -382,23 +381,27 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 // 5️⃣ Move to the next selected node
                 System.out.println(myAgent.getLocalName() + " moving to: " + nextNodeId);
 
-                /*MessageTemplate template= MessageTemplate.and(
+                MessageTemplate template= MessageTemplate.and(
                         MessageTemplate.MatchProtocol("ShareMap"),
-                        	MessageTemplate.MatchPerformative(ACLMessage.INFORM)
-                        );
+                        MessageTemplate.MatchPerformative(ACLMessage.INFORM)
+                );
                 ACLMessage msgr = new ACLMessage(ACLMessage.INFORM);
                 while (msgr!=null) {
                 	msgr=this.myAgent.receive(template);
+                	if (msgr == null ) {
+                		break;
+                	}
                 	AID id = msgr.getSender();
                 	// Processing of the message
                 	String textMessage = msgr.getContent();
+                	
                 	ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
                 	msgrespond.setProtocol("ShareMap");
                 	msgrespond.setSender(this.myAgent.getAID());
             		msgrespond.addReceiver(id);
             		msgrespond.setContent("Heelee");
             		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
-                }*/
+                }
                 myAgent.moveTo(new GsLocation(nextNodeId));
                 
                 exitValue = 3; // Continue back to OBSERVE state
