@@ -99,10 +99,10 @@ public class MyFSMBehaviour extends FSMBehaviour {
         
         public void action() {
             AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
-            ACLMessage msg = new ACLMessage(ACLMessage.INFORM);
+            ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
     		msg.setProtocol("ShareMap");
     		msg.setSender(this.myAgent.getAID());
-    		msg.setContent("H");
+    		msg.setContent("Hello");
     		for (String agentName : this.list_agentNames) {
     			msg.addReceiver(new AID(agentName,AID.ISLOCALNAME));
     		}
@@ -164,17 +164,19 @@ public class MyFSMBehaviour extends FSMBehaviour {
             
             MessageTemplate template= MessageTemplate.and(
             MessageTemplate.MatchProtocol("ShareMap"),
-            	MessageTemplate.MatchPerformative(ACLMessage.INFORM)
+            	MessageTemplate.MatchPerformative(ACLMessage.ACCEPT_PROPOSAL)
             );
-            ACLMessage msgr = new ACLMessage(ACLMessage.INFORM);
             while (true) {
-            	msgr=this.myAgent.receive(template);
+            	ACLMessage msgr=this.myAgent.receive(template);
             	if (msgr == null) {
             		break;
             	}
             	AID id = msgr.getSender();
             	// Processing of the message
             	String textMessage = msgr.getContent();
+            	/*if (!textMessage.startsWith("M")) {
+            		break;
+            	}*/
             	this.parse_and_learnknowlege(textMessage);
             	String diff_knowledge = this.get_unknow_knowledge(id.getLocalName());
             	ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
@@ -216,7 +218,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
         		  String[] spl = s.substring(1).split(" ");
         		  String location = spl[0];
         		  String value = spl[1];
-        		  if (this.ressources.get("Gold").get(location) > Integer.parseInt(value)) {
+        		  if (this.ressources.get("Gold").get(location) != null && this.ressources.get("Gold").get(location) > Integer.parseInt(value)) {
         			  this.ressources.get("Gold").put(location, Integer.parseInt(value));
         		  }
         	  }
@@ -224,7 +226,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
         		  String[] spl = s.substring(1).split(" ");
         		  String location = spl[0];
         		  String value = spl[1];
-        		  if (this.ressources.get("Diamond").get(location) > Integer.parseInt(value)) {
+        		  if (this.ressources.get("Diamond").get(location) != null && this.ressources.get("Diamond").get(location) > Integer.parseInt(value)) {
         			  this.ressources.get("Diamond").put(location, Integer.parseInt(value));
         		  }
         	  }
@@ -383,23 +385,23 @@ public class MyFSMBehaviour extends FSMBehaviour {
 
                 MessageTemplate template= MessageTemplate.and(
                         MessageTemplate.MatchProtocol("ShareMap"),
-                        MessageTemplate.MatchPerformative(ACLMessage.INFORM)
+                        MessageTemplate.MatchPerformative(ACLMessage.REQUEST)
                 );
-                ACLMessage msgr = new ACLMessage(ACLMessage.INFORM);
-                while (msgr!=null) {
-                	msgr=this.myAgent.receive(template);
+                while (true) {
+                	ACLMessage msgr=this.myAgent.receive(template);
                 	if (msgr == null ) {
                 		break;
                 	}
-                	AID id = msgr.getSender();
-                	// Processing of the message
                 	String textMessage = msgr.getContent();
-                	
-                	ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
+                	/*if (!textMessage.startsWith("Hello")) {
+                		break;
+                	}*/
+                	AID id = msgr.getSender();
+                	ACLMessage msgrespond = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
                 	msgrespond.setProtocol("ShareMap");
                 	msgrespond.setSender(this.myAgent.getAID());
             		msgrespond.addReceiver(id);
-            		msgrespond.setContent("Heelee");
+            		msgrespond.setContent("M");
             		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
                 }
                 myAgent.moveTo(new GsLocation(nextNodeId));
