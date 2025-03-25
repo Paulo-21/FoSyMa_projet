@@ -69,9 +69,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
         registerState(new ExploreBehaviour(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge), STATE_EXPLORE);
 
         // Define state transitions
-        registerTransition(STATE_OBSERVE, STATE_COMMUNICATE, 1);  
+        //registerTransition(STATE_OBSERVE, STATE_COMMUNICATE, 1);  
         registerTransition(STATE_OBSERVE, STATE_EXPLORE, 2);  
-        registerTransition(STATE_COMMUNICATE, STATE_EXPLORE, 2);  
+        //registerTransition(STATE_COMMUNICATE, STATE_EXPLORE, 2);  
         registerTransition(STATE_EXPLORE, STATE_OBSERVE, 3);  // when agent finished explore, it goes back to the observe state
 
     }
@@ -400,9 +400,6 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 		break;
                 	}
                 	String textMessage = msgr.getContent();
-                	/*if (!textMessage.startsWith("Hello")) {
-                		break;
-                	}*/
                 	AID id = msgr.getSender();
                 	ACLMessage msgrespond = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
                 	msgrespond.setProtocol("ShareMap");
