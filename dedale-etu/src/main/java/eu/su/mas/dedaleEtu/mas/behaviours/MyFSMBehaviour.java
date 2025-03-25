@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import java.util.Vector;
 
 /**
@@ -104,6 +105,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
     		msg.setSender(this.myAgent.getAID());
     		msg.setContent("Hello");
     		for (String agentName : this.list_agentNames) {
+    			if (this.last_talk_knowlege.get(agentName) == this.knowledge.size()) {
+    				continue;
+    			}
     			msg.addReceiver(new AID(agentName,AID.ISLOCALNAME));
     		}
     		myAgent.sendMessage(msg);
@@ -177,6 +181,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
             	/*if (!textMessage.startsWith("M")) {
             		break;
             	}*/
+            	if (this.last_talk_knowlege.get(id.getLocalName()) == this.knowledge.size()) { 
+            		continue;
+            	}
             	this.parse_and_learnknowlege(textMessage);
             	String diff_knowledge = this.get_unknow_knowledge(id.getLocalName());
             	ACLMessage msgrespond = new ACLMessage(ACLMessage.INFORM);
@@ -404,7 +411,15 @@ public class MyFSMBehaviour extends FSMBehaviour {
             		msgrespond.setContent("M");
             		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
                 }
-                myAgent.moveTo(new GsLocation(nextNodeId));
+                if (!myAgent.moveTo(new GsLocation(nextNodeId)) ) { // Inter blockage Random
+                	List<String> opennode = theMap.getOpenNodes();
+                	Random rand = new Random();
+                	int n = rand.nextInt(opennode.size());
+                	//theMap.getShortestPathToClosestOpenNode(""+n).get(0);
+                	System.out.println(opennode.get(n));
+                	nextNodeId = theMap.getShortestPath(myPosition.getLocationId(), opennode.get(n)).get(0);
+                	myAgent.moveTo(new GsLocation(nextNodeId));
+                }
                 
                 exitValue = 3; // Continue back to OBSERVE state
             }
