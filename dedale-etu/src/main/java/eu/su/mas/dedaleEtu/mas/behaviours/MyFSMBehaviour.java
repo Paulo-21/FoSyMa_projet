@@ -62,16 +62,12 @@ public class MyFSMBehaviour extends FSMBehaviour {
         
         for (String name : agentNames) { this.last_talk_knowlege.put(name, -1); }
         
-        registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames), STATE_OBSERVE);
-
-        //registerFirstState(new ObservationBehaviour(myagent, this.sharedmyMap, this.agentSeen, this.ressources), STATE_OBSERVE);
-        
+        registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames), STATE_OBSERVE);        
         registerState(new ExploreBehaviour(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge), STATE_EXPLORE);
 
         // Define state transitions
         //registerTransition(STATE_OBSERVE, STATE_COMMUNICATE, 1);  
         registerTransition(STATE_OBSERVE, STATE_EXPLORE, 2);  
-        //registerTransition(STATE_COMMUNICATE, STATE_EXPLORE, 2);  
         registerTransition(STATE_EXPLORE, STATE_OBSERVE, 3);  // when agent finished explore, it goes back to the observe state
 
     }
@@ -193,6 +189,24 @@ public class MyFSMBehaviour extends FSMBehaviour {
         		msgrespond.setContent(diff_knowledge);
         		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
             }
+            try {
+                myAgent.doWait(50);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            MessageTemplate template2= MessageTemplate.and(
+                    MessageTemplate.MatchProtocol("ShareMap"),
+                    MessageTemplate.MatchPerformative(ACLMessage.INFORM)
+            );
+            while (true) {
+            	ACLMessage msgr=this.myAgent.receive(template2);
+            	if (msgr == null) {
+            		break;
+            	}
+            	String textMessage = msgr.getContent();
+            	this.parse_and_learnknowlege(textMessage);
+            	
+            }
             exitValue = 2;
         }
         private String get_unknow_knowledge(String agentname) {
@@ -217,8 +231,8 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	  if (s.charAt(0) == 'E') {
         		  String e = s.substring(1);
         		  String[] slp = e.split(" ");
-        		  theMap.addNewNode(slp[0]);
-        		  theMap.addNewNode(slp[1]);
+        		  theMap.addNode(slp[0], MapRepresentation.MapAttribute.closed);
+        		  theMap.addNode(slp[1], MapRepresentation.MapAttribute.closed);
         		  theMap.addEdge(slp[0], slp[1]);
         	  }
         	  else if (s.charAt(0) == 'G') {
@@ -243,76 +257,6 @@ public class MyFSMBehaviour extends FSMBehaviour {
         public int onEnd() {
             return this.exitValue;
         }
-
-    }
-
-    /** 
-     * Observation state: The agent scans the surrounding environment, updates the map,
-     * and decides whether to communicate or explore.
-     */
-    /** 
-     * Observation state: The agent scans the surrounding environment, updates the map,
-     * and decides whether to communicate or explore.
-     */
-    private class ObservationBehaviour extends OneShotBehaviour {
-        /**
-		 * 
-		 */
-		private static final long serialVersionUID = 8430689706443796558L;
-		private int exitValue;
-        private List<Couple<Location, String>> agentSeen;
-        private HashMap<String, HashMap<Location, Integer>> ressources;
-        private SharedMapRepresentation myMap;
-        public ObservationBehaviour(final AbstractDedaleAgent myagent, SharedMapRepresentation map, HashMap<String, HashMap<Location, Integer>> ressources ) {
-        	super(myagent);
-        	this.ressources = ressources;
-        	this.myMap = map;
-        }
-        
-        public void action() {
-        	System.out.println("hejzedoj");
-            AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
-            // Initialize the map if not already created
-            try {
-                myAgent.doWait(500);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            boolean agentDetected = false;
-            // Retrieve the current position
-            Location myPosition = myAgent.getCurrentPosition();
-            if (myPosition != null) {
-                // Get the observable surrounding nodes
-                List<Couple<Location, List<Couple<Observation, String>>>> lobs = myAgent.observe();
-                Iterator<Couple<Location, List<Couple<Observation, String>>>> iter=lobs.iterator();
-    			while(iter.hasNext()){
-    				Couple<Location, List<Couple<Observation, String>>> next_obs = iter.next();
-    				Location accessibleNode=next_obs.getLeft();
-    				List<Couple<Observation, String>> list_obs = next_obs.getRight();
-    				Iterator<Couple<Observation,String>> iter_obs_next = list_obs.iterator();
-    				while(iter_obs_next.hasNext()) {
-    					Couple<Observation, String> couple = iter_obs_next.next();
-    					Observation obs = couple.getLeft();
-    					String Value = couple.getRight();
-    					if (obs == Observation.AGENTNAME) {
-    						agentDetected = true;
-    						this.agentSeen.add(new Couple(accessibleNode, obs.toString()));
-    					}
-    				}
-    			}
-            }
-                if (agentDetected) {
-                    this.exitValue = 1;  // Move to COMMUNICATE state
-                } else {
-                    this.exitValue = 2;  // Move to EXPLORE state
-                }
-        }
-
-        @Override
-        public int onEnd() {
-            return this.exitValue;
-        }
-
     }
 
     /**
@@ -377,11 +321,11 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     }
                 }
                 // 3️° Check if the exploration is complete
-                if (!theMap.hasOpenNode()) {
+                /*if (!theMap.hasOpenNode()) {
                     System.out.println(this.myAgent.getLocalName() + " - Exploration successfully completed.");
                     myAgent.doDelete();
                     return;
-                }
+                }*/
                 // 4️⃣ Select the next node to move to
                 if (nextNodeId == null) {
                     // No directly accessible unexplored node, compute the shortest path to the closest open node
@@ -399,21 +343,26 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 	if (msgr == null ) {
                 		break;
                 	}
-                	String textMessage = msgr.getContent();
+                	//String textMessage = msgr.getContent();
                 	AID id = msgr.getSender();
                 	ACLMessage msgrespond = new ACLMessage(ACLMessage.ACCEPT_PROPOSAL);
                 	msgrespond.setProtocol("ShareMap");
                 	msgrespond.setSender(this.myAgent.getAID());
             		msgrespond.addReceiver(id);
-            		msgrespond.setContent("M");
+            		String sendtext = get_unknow_knowledge(id.getLocalName(), this.knowledge, this.last_talk_knowlege);
+            		msgrespond.setContent(sendtext);
             		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
                 }
+                try {
+                    myAgent.doWait(50);
+                 } catch (Exception e) {
+                     e.printStackTrace();
+                 }
+                
                 if (!myAgent.moveTo(new GsLocation(nextNodeId)) ) { // Inter blockage Random
                 	List<String> opennode = theMap.getOpenNodes();
                 	Random rand = new Random();
-                	int n = rand.nextInt(opennode.size());
-                	//theMap.getShortestPathToClosestOpenNode(""+n).get(0);
-                	System.out.println(opennode.get(n));
+                	int n = rand.nextInt(opennode.size());               	
                 	nextNodeId = theMap.getShortestPath(myPosition.getLocationId(), opennode.get(n)).get(0);
                 	myAgent.moveTo(new GsLocation(nextNodeId));
                 }
@@ -421,10 +370,55 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 exitValue = 3; // Continue back to OBSERVE state
             }
         }
+        
 
         @Override
         public int onEnd() {
             return exitValue;
         }
+    }
+    private String get_unknow_knowledge(String agentname, ArrayList<String> knowledge, HashMap<String, Integer> last_talk_knowlege) {
+    	StringBuilder builder = new StringBuilder();
+    	int i = knowledge.size();
+    	int last = last_talk_knowlege.get(agentname);
+    	for (String k : knowledge.reversed()) {
+    		if (i == last) {
+    			break;
+    		}
+    		builder.append(k);
+    		builder.append(',');
+    		i--;
+    	}
+    	last_talk_knowlege.put(agentname, i);
+    	return builder.toString();
+    }
+    private void parse_and_learnknowlege(String sharemap_result, SharedMapRepresentation myMap) {
+    	MapRepresentation theMap = myMap.getMyMap();
+    	String[] myArray = sharemap_result.split(",");
+    	for (String s : myArray) {
+    	  if (s.charAt(0) == 'E') {
+    		  String e = s.substring(1);
+    		  String[] slp = e.split(" ");
+    		  theMap.addNode(slp[0], MapRepresentation.MapAttribute.closed);
+    		  theMap.addNode(slp[1], MapRepresentation.MapAttribute.closed);
+    		  theMap.addEdge(slp[0], slp[1]);
+    	  }
+    	  else if (s.charAt(0) == 'G') {
+    		  String[] spl = s.substring(1).split(" ");
+    		  String location = spl[0];
+    		  String value = spl[1];
+    		  if (ressources.get("Gold").get(location) != null && ressources.get("Gold").get(location) > Integer.parseInt(value)) {
+    			  ressources.get("Gold").put(location, Integer.parseInt(value));
+    		  }
+    	  }
+    	  else if (s.charAt(0) == 'D') {
+    		  String[] spl = s.substring(1).split(" ");
+    		  String location = spl[0];
+    		  String value = spl[1];
+    		  if (ressources.get("Diamond").get(location) != null && ressources.get("Diamond").get(location) > Integer.parseInt(value)) {
+    			  ressources.get("Diamond").put(location, Integer.parseInt(value));
+    		  }
+    	  }
+    	}
     }
 }
