@@ -19,7 +19,9 @@ import eu.su.mas.dedale.env.Observation;
 import eu.su.mas.dedale.env.gs.GsLocation;
 import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import eu.su.mas.dedaleEtu.mas.knowledge.AgentInfo;
+import eu.su.mas.dedaleEtu.mas.knowledge.Capacity;
 import eu.su.mas.dedaleEtu.mas.knowledge.Coalition;
+import eu.su.mas.dedaleEtu.mas.knowledge.CurrentSelectedCoalition;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation.MapAttribute;
 import eu.su.mas.dedaleEtu.mas.knowledge.SharedMapRepresentation;
@@ -59,6 +61,8 @@ public class MyFSMBehaviour extends FSMBehaviour {
     private Integer nb_blockage = 0;
     private HashMap<String, Location> siloPosition;
     private Boolean try_solve_block;
+    private Capacity myCap;
+    private CurrentSelectedCoalition currentCoalition;
     
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
@@ -71,11 +75,13 @@ public class MyFSMBehaviour extends FSMBehaviour {
         this.last_talk_knowlege = new HashMap();
         this.tresor_location = new HashMap();
         this.destination = new StringBuilder();
+        this.myCap = new Capacity(myagent);
+        this.currentCoalition = new CurrentSelectedCoalition();
         
         for (String name : agentNames) { this.last_talk_knowlege.put(name, -1); }
         
-        registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames, this.tresor_location), STATE_OBSERVE);        
-        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location, destination,nb_blockage, try_solve_block), STATE_OBJECTIF);
+        registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames, this.tresor_location, currentCoalition), STATE_OBSERVE);        
+        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location, destination,nb_blockage, try_solve_block, currentCoalition), STATE_OBJECTIF);
         registerState(new MoveAndInterblockage(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.destination, nb_blockage, try_solve_block), STATE_EXPLORE);
 
         // Define state transitions
@@ -98,8 +104,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private ArrayList<String> knowledge;
         private HashMap<String, Integer> last_talk_knowlege;
         private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
+        private CurrentSelectedCoalition currentCoalition;
         
-        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location) {
+        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, CurrentSelectedCoalition currentCoalition) {
         	super(myagent);
         	this.ressources = ressources;
         	this.myMap = map;
@@ -107,6 +114,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.knowledge = knowledge;
         	this.last_talk_knowlege = last_talk_knowlege;
         	this.tresor_location = tresor_location;
+        	this.currentCoalition = currentCoalition;
         }
         
         public void action() {
@@ -138,7 +146,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
                     if (isNewNode) {
                     	StringBuilder builder = new StringBuilder("E");
-                    	
+                    		
                     	builder.append(myPosition);
                     	builder.append(" ");
                     	builder.append(accessibleNode);
@@ -257,8 +265,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private StringBuilder destination;
         private Integer nb_blockage;
         private Boolean try_solve_block;
+        private CurrentSelectedCoalition currentCoalition;
         
-    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, StringBuilder destination, Integer nb_blockage, Boolean try_solve_block) {
+    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, StringBuilder destination, Integer nb_blockage, Boolean try_solve_block, CurrentSelectedCoalition currentCoalition) {
     		super(myagent);
     		this.exitValue = 2;
     		this.tresor_location = tresor_location;
@@ -271,6 +280,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.destination = destination;
         	this.nb_blockage = nb_blockage;
         	this.try_solve_block = try_solve_block;
+        	this.currentCoalition = currentCoalition;
         }
         public void action() {
         	MapRepresentation map = this.myMap.getMyMap();
