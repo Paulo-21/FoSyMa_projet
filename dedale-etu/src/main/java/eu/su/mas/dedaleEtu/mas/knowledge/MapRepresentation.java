@@ -313,7 +313,9 @@ public class MapRepresentation implements Serializable {
 				.filter(n -> n.getAttribute("ui.class")==MapAttribute.open.toString())
 				.findAny()).isPresent();
 	}
-
+	public int getNodeCount() {
+		return this.g.getNodeCount();
+	}
 
 
 
