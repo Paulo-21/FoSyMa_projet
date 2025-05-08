@@ -81,19 +81,13 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 			//List of observable from the agent's current position
 			List<Couple<Location,List<Couple<Observation,String>>>> lobs=((AbstractDedaleAgent)this.myAgent).observe();//myPosition
 
-			/**
-			 * Just added here to let you see what the agent is doing, otherwise he will be too quick
-			 */
 			try {
 				this.myAgent.doWait(1000);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
-
-			//1) remove the current node from openlist and add it to closedNodes.
 			this.myMap.addNode(myPosition.getLocationId(), MapAttribute.closed);
-
-			//2) get the surrounding nodes and, if not in closedNodes, add them to open nodes.
+			
 			String nextNodeId=null;
 			Iterator<Couple<Location, List<Couple<Observation, String>>>> iter=lobs.iterator();
 			while(iter.hasNext()){
@@ -111,27 +105,17 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 					if (nextNodeId==null && isNewNode) nextNodeId=accessibleNode.getLocationId();
 				}
 			}
-
-			//3) while openNodes is not empty, continues.
 			if (!this.myMap.hasOpenNode()){
-				//Explo finished
 				finished=true;
 				System.out.println(this.myAgent.getLocalName()+" - Exploration successufully done, behaviour removed.");
 			}else{
-				//4) select next move.
-				//4.1 If there exist one open node directly reachable, go for it,
-				//	 otherwise choose one from the openNode list, compute the shortestPath and go for it
-				if (nextNodeId==null){
-					//no directly accessible openNode
-					//chose one, compute the path and take the first step.
+				if (nextNodeId==null) {
 					nextNodeId=this.myMap.getShortestPathToClosestOpenNode(myPosition.getLocationId()).get(0);//getShortestPath(myPosition,this.openNodes.get(0)).get(0);
 					//System.out.println(this.myAgent.getLocalName()+"-- list= "+this.myMap.getOpenNodes()+"| nextNode: "+nextNode);
 				}else {
 					//System.out.println("nextNode notNUll - "+this.myAgent.getLocalName()+"-- list= "+this.myMap.getOpenNodes()+"\n -- nextNode: "+nextNode);
 				}
 				
-				//5) At each time step, the agent check if he received a graph from a teammate. 	
-				// If it was written properly, this sharing action should be in a dedicated behaviour set.
 				MessageTemplate msgTemplate=MessageTemplate.and(
 						MessageTemplate.MatchProtocol("SHARE-TOPO"),
 						MessageTemplate.MatchPerformative(ACLMessage.INFORM));
@@ -146,7 +130,7 @@ public class ExploCoopBehaviour extends SimpleBehaviour {
 					}
 					this.myMap.mergeMap(sgreceived);
 				}
-
+				System.out.println(this.finished);
 				((AbstractDedaleAgent)this.myAgent).moveTo(new GsLocation(nextNodeId));
 			}
 

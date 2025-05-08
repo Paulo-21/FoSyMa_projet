@@ -153,7 +153,8 @@ public final class ConfigurationFile {
 	//public static String INSTANCE_CONFIGURATION_ENTITIES=null;
 	//public static String INSTANCE_CONFIGURATION_ENTITIES="resources/agentExplo.json";
 	//public static String INSTANCE_CONFIGURATION_ENTITIES="resources/agentExplo-2.json";
-	public static String INSTANCE_CONFIGURATION_ENTITIES="resources/agent-2collect.json";
+	//public static String INSTANCE_CONFIGURATION_ENTITIES="resources/agent-2collect.json";
+	public static String INSTANCE_CONFIGURATION_ENTITIES="resources/myconfig.json";
 	//public static String INSTANCE_CONFIGURATION_ENTITIES="resources/agentExploCoop-2.json";
 	//public static String INSTANCE_CONFIGURATION_ENTITIES="resources/treasureHunt/map2023-entities.json";
 	//public static String INSTANCE_CONFIGURATION_ENTITIES="resources/treasureHunt/agentTankerCollect.json";
