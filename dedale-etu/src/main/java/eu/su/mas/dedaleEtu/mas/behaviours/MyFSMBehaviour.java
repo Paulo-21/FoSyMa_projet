@@ -332,7 +332,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private StringBuilder destination;
         private Integer nb_blockage;
         private Boolean try_solve_blockage;
-        public MoveAndInterblockage (final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation myMap, List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, ArrayList<String> knowledge, StringBuilder destination, Integer nb_blockage, Boolean try_solve_block) {
+        public MoveAndInterblockage (final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation myMap, List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, ArrayList<String> knowledge, StringBuilder destination, Integer nb_blockage, Boolean try_solve_blockage) {
         	super(myagent);
         	this.ressources = ressources;
         	this.myMap = myMap;
