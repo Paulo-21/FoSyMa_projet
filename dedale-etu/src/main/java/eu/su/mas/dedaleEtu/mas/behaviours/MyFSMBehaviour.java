@@ -17,9 +17,12 @@ import eu.su.mas.dedale.env.Location;
 import eu.su.mas.dedale.env.Observation;
 import eu.su.mas.dedale.env.gs.GsLocation;
 import eu.su.mas.dedale.mas.AbstractDedaleAgent;
+import eu.su.mas.dedaleEtu.mas.knowledge.AgentInfo;
+import eu.su.mas.dedaleEtu.mas.knowledge.Coalition;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation.MapAttribute;
 import eu.su.mas.dedaleEtu.mas.knowledge.SharedMapRepresentation;
+import eu.su.mas.dedaleEtu.mas.knowledge.Tresor;
 import eu.su.mas.dedaleEtu.mas.behaviours.ExploCoopBehaviour;
 
 import java.io.IOException;
@@ -41,15 +44,18 @@ public class MyFSMBehaviour extends FSMBehaviour {
     
     //Deceleration of three states: observe, communicate, explore
     private static final String STATE_OBSERVE = "OBSERVE";
-    private static final String STATE_COMMUNICATE = "COMMUNICATE";
+    private static final String STATE_OBJECTIF = "OBJECTIF";
     private static final String STATE_EXPLORE = "EXPLORE";
 
     private SharedMapRepresentation sharedmyMap;
+    private ArrayList<AgentInfo> knowAgents;
     private List<String> list_agentNames;
     private HashMap<String, HashMap<String, Integer>> ressources;
+    private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
     private ArrayList<String> knowledge;
     private HashMap<String, Integer> last_talk_knowlege;
-
+    private String destination;
+    
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
         this.sharedmyMap = new SharedMapRepresentation();
@@ -59,19 +65,21 @@ public class MyFSMBehaviour extends FSMBehaviour {
         this.list_agentNames = agentNames;
         this.knowledge = new ArrayList<String>();
         this.last_talk_knowlege = new HashMap();
+        this.tresor_location = new HashMap();
+        this.destination = "";
         
         for (String name : agentNames) { this.last_talk_knowlege.put(name, -1); }
         
         registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames), STATE_OBSERVE);        
+        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location), STATE_OBJECTIF);
         registerState(new ExploreBehaviour(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge), STATE_EXPLORE);
 
         // Define state transitions
-        //registerTransition(STATE_OBSERVE, STATE_COMMUNICATE, 1);  
-        registerTransition(STATE_OBSERVE, STATE_EXPLORE, 2);  
-        registerTransition(STATE_EXPLORE, STATE_OBSERVE, 3);  // when agent finished explore, it goes back to the observe state
-
+        registerTransition(STATE_OBSERVE, STATE_OBJECTIF, 1);
+        registerTransition(STATE_OBJECTIF, STATE_EXPLORE, 2);
+        registerTransition(STATE_EXPLORE, STATE_OBSERVE, 3);
     }
-    
+
     private class BroadCastBehaviour extends OneShotBehaviour {
         /**
 		 * 
@@ -84,14 +92,16 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private SharedMapRepresentation myMap;
         private ArrayList<String> knowledge;
         private HashMap<String, Integer> last_talk_knowlege;
+        private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
         
-        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames ) {
+        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location) {
         	super(myagent);
         	this.ressources = ressources;
         	this.myMap = map;
         	this.list_agentNames = agentNames;
         	this.knowledge = knowledge;
         	this.last_talk_knowlege = last_talk_knowlege;
+        	this.tresor_location = tresor_location;
         }
         
         public void action() {
@@ -119,6 +129,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 String nextNodeId = null;
                 for (Couple<Location, List<Couple<Observation, String>>> couple : lobs) {
                     Location accessibleNode = couple.getLeft();
+                    boolean tresor_saw = false;
                     boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
                     if (isNewNode) {
                     	StringBuilder builder = new StringBuilder("E");
@@ -133,17 +144,26 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     	Observation obs_names = o.getLeft();
                     	String obs_value = o.getRight();
                     	if (obs_names == Observation.GOLD) {
+                    		tresor_saw = true;
                     		HashMap<String, Integer> d = this.ressources.get("Gold");
                     		d.put(myPosition.toString(), Integer.parseInt(obs_value));
                     		StringBuilder builder = new StringBuilder("G");
                     		builder.append(accessibleNode.toString());
                     		builder.append(" ");
                     		builder.append(obs_value);
+                    		builder.append(";");
                         	this.knowledge.add(builder.toString());
                     	} 
                     	else if (obs_names == Observation.DIAMOND) {
+                    		tresor_saw = true;
                     		HashMap<String, Integer> d = this.ressources.get("Diamond");
                     		d.put(myPosition.toString(), Integer.parseInt(obs_value));
+                    		StringBuilder builder = new StringBuilder("D");
+                    		builder.append(accessibleNode.toString());
+                    		builder.append(" ");
+                    		builder.append(obs_value);
+                    		builder.append(";");
+                        	this.knowledge.add(builder.toString());
                     	}
                     }
                     // Ensure we do not mark the current position as an edge node
@@ -155,6 +175,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
                             nextNodeId = accessibleNode.getLocationId();
                         }
                     }
+					if(this.tresor_location.get(accessibleNode) != null && !tresor_saw ) { //Remove 
+						this.tresor_location.remove(accessibleNode);
+					}
                 }
             }
             try {
@@ -207,65 +230,66 @@ public class MyFSMBehaviour extends FSMBehaviour {
             }
             exitValue = 2;
         }
-        /*private String get_unknow_knowledge(String agentname) {
-        	StringBuilder builder = new StringBuilder();
-        	int i = this.knowledge.size();
-        	int last = this.last_talk_knowlege.get(agentname);
-        	for (String k : this.knowledge.reversed()) {
-        		if (i == last) {
-        			break;
-        		}
-        		builder.append(k);
-        		builder.append(',');
-        		i--;
-        	}
-        	this.last_talk_knowlege.put(agentname, i);
-        	return builder.toString();
-        }
-        private void parse_and_learnknowlege(String sharemap_result) {
-        	MapRepresentation theMap = this.myMap.getMyMap();
-        	String[] myArray = sharemap_result.split(",");
-        	for (String s : myArray) {
-        	  if (s.charAt(0) == 'E') {
-        		  String e = s.substring(1);
-        		  String[] slp = e.split(" ");
-        		  theMap.addNode(slp[0], MapRepresentation.MapAttribute.closed);
-        		  theMap.addNode(slp[1], MapRepresentation.MapAttribute.closed);
-        		  theMap.addEdge(slp[0], slp[1]);
-        	  }
-        	  else if (s.charAt(0) == 'G') {
-        		  String[] spl = s.substring(1).split(" ");
-        		  String location = spl[0];
-        		  String value = spl[1];
-        		  if (this.ressources.get("Gold").get(location) != null && this.ressources.get("Gold").get(location) > Integer.parseInt(value)) {
-        			  this.ressources.get("Gold").put(location, Integer.parseInt(value));
-        		  }
-        	  }
-        	  else if (s.charAt(0) == 'D') {
-        		  String[] spl = s.substring(1).split(" ");
-        		  String location = spl[0];
-        		  String value = spl[1];
-        		  if (this.ressources.get("Diamond").get(location) != null && this.ressources.get("Diamond").get(location) > Integer.parseInt(value)) {
-        			  this.ressources.get("Diamond").put(location, Integer.parseInt(value));
-        		  }
-        	  }
-        	}
-        }*/
+        
         @Override
         public int onEnd() {
             return this.exitValue;
         }
     }
-
-    /**
-     * Communication state: The agent listens for map-sharing messages from other agents
-     * and merges the received maps.
-     */
     
-    /**
-     * Exploration state: The agent moves to the closest unexplored node,
-     * following the shortest path.
-     */
+    private class GetObjectifs extends OneShotBehaviour {
+    	/**
+		 * 
+		 */
+		private static final long serialVersionUID = -6932897830993073426L;
+		int exitValue;
+		private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
+		private List<String> list_agentNames;
+        private HashMap<String, HashMap<String, Integer>> ressources;
+        private SharedMapRepresentation myMap;
+        private ArrayList<String> knowledge;
+        private HashMap<String, Integer> last_talk_knowlege;
+        
+    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location) {
+    		super(myagent);
+    		this.exitValue = 0;
+    		this.tresor_location = tresor_location;
+        	this.ressources = ressources;
+        	this.myMap = sharedmyMap;
+        	this.list_agentNames = agentNames;
+        	this.knowledge = knowledge;
+        	this.last_talk_knowlege = last_talk_knowlege;
+        	this.tresor_location = tresor_location;
+        }
+        public void action() {
+        	MapRepresentation map = this.myMap.getMyMap();
+        	AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
+            Location myPosition = myAgent.getCurrentPosition();
+            int current_coalition_size = (int) Math.pow(2, 64);
+            int current_surplus_cap = (int) Math.pow(2, 64);
+            Coalition choosen_coalition = null;
+            String choosen_location = null;
+            for (Location  k :  tresor_location.keySet()) {
+            	Couple <Tresor, List<Coalition>> tresor_tuple = tresor_location.get(k);
+            	Tresor t = tresor_tuple.getLeft();
+            	List<Coalition> lc = tresor_tuple.getRight();
+            	int dist = map.getShortestPath(myPosition.toString(), k.toString()).size();
+            	for (Coalition coalition : lc) {
+            		if (coalition.isConfirmed() && (coalition.getCoalitionSize() < current_coalition_size || (coalition.getCoalitionSize() == current_coalition_size && coalition.getSurplusCap(t) < current_surplus_cap))) {
+            			choosen_location = k.toString();
+            		}
+            	}
+            }
+            if (choosen_location == null ) {
+            	choosen_location = map.getShortestPathToClosestOpenNode(myPosition.getLocationId()).get(0);
+            }
+        }
+        @Override
+        public int onEnd() {
+            return this.exitValue;
+        }
+    }
+    
     private class ExploreBehaviour extends OneShotBehaviour {
         /**
 		 * 
@@ -378,6 +402,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
     private static String get_unknow_knowledge(MapRepresentation myMap, String agentname, ArrayList<String> knowledge, HashMap<String, Integer> last_talk_knowlege) {
     	List<String> openodes = myMap.getOpenNodes();
     	StringBuilder builder = new StringBuilder();
+    	builder.append('M');
     	int i = knowledge.size();
     	int last = last_talk_knowlege.get(agentname);
     	for (String k : knowledge.reversed()) {
@@ -399,6 +424,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
     		i--;
     	}
     	last_talk_knowlege.put(agentname, i);
+    	
     	return builder.toString();
     }
     private static void parse_and_learnknowlege(String sharemap_result, SharedMapRepresentation myMap, HashMap<String, HashMap<String, Integer>> ressource_value) {
