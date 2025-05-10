@@ -5,6 +5,7 @@ import eu.su.mas.dedale.env.Location;
 import eu.su.mas.dedale.env.Observation;
 import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import eu.su.mas.dedale.mas.agent.behaviours.platformManagment.*;
+import eu.su.mas.dedaleEtu.mas.behaviours.MyFSMBehaviour;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,7 +45,8 @@ public class DummyCollectorAgent extends AbstractDedaleAgent{
 		super.setup();
 
 		List<Behaviour> lb=new ArrayList<Behaviour>();
-		lb.add(new RandomWalkExchangeBehaviour(this));
+		//lb.add(new RandomWalkExchangeBehaviour(this));
+		//lb.add(new MyFSMBehaviour(this,this.myMap,list_agentNames));
 
 		addBehaviour(new StartMyBehaviours(this,lb));
 

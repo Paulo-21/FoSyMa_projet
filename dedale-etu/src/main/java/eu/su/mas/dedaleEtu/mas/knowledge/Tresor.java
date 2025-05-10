@@ -1,6 +1,12 @@
 package eu.su.mas.dedaleEtu.mas.knowledge;
 
-public class Tresor {
+import java.io.Serializable;
+
+public class Tresor implements Serializable {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -6886905853940252551L;
 	private int locking;
 	private int strenght;
 	public Tresor(int locking, int strenght) {
