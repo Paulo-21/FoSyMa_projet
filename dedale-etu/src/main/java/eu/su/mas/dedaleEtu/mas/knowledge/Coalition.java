@@ -1,10 +1,15 @@
 package eu.su.mas.dedaleEtu.mas.knowledge;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 
 
-public class Coalition {
+public class Coalition implements Serializable {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -6713739261135933643L;
 	boolean confirmed;
 	int tot_locking;
 	int tot_strenght;

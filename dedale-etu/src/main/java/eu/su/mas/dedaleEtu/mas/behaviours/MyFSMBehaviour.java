@@ -30,6 +30,7 @@ import eu.su.mas.dedaleEtu.mas.behaviours.ExploCoopBehaviour;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -58,11 +59,10 @@ public class MyFSMBehaviour extends FSMBehaviour {
     private ArrayList<String> knowledge;
     private HashMap<String, Integer> last_talk_knowlege;
     private StringBuilder destination;
-    private Integer nb_blockage = 0;
     private HashMap<String, Location> siloPosition;
-    private Boolean try_solve_block;
     private Capacity myCap;
     private CurrentSelectedCoalition currentCoalition;
+    private WrapperBlockage blockageTools;
     
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
@@ -77,12 +77,14 @@ public class MyFSMBehaviour extends FSMBehaviour {
         this.destination = new StringBuilder();
         this.myCap = new Capacity(myagent);
         this.currentCoalition = new CurrentSelectedCoalition();
+        this.blockageTools = new WrapperBlockage(0, false);
         
         for (String name : agentNames) { this.last_talk_knowlege.put(name, -1); }
         
+        
         registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames, this.tresor_location, currentCoalition), STATE_OBSERVE);        
-        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location, destination,nb_blockage, try_solve_block, currentCoalition), STATE_OBJECTIF);
-        registerState(new MoveAndInterblockage(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.destination, nb_blockage, try_solve_block), STATE_EXPLORE);
+        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location, destination,this.blockageTools, currentCoalition), STATE_OBJECTIF);
+        registerState(new MoveAndInterblockage(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.destination, this.blockageTools), STATE_EXPLORE);
 
         // Define state transitions
         registerTransition(STATE_OBSERVE, STATE_OBJECTIF, 1);
@@ -116,8 +118,20 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.tresor_location = tresor_location;
         	this.currentCoalition = currentCoalition;
         }
-        
+        public void true_wait(int millis) {
+        	AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
+        	Date currentDate = new Date();
+            long timestamp = currentDate.getTime();
+            while(new Date().getTime() - timestamp <= millis) {
+            	try {
+                    myAgent.doWait(millis);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
         public void action() {
+        	//System.out.println("size know: "+this.knowledge.size());
             AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
             ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
     		msg.setProtocol("ShareMap");
@@ -146,7 +160,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
                     if (isNewNode) {
                     	StringBuilder builder = new StringBuilder("E");
-                    		
+                    	//System.out.println("ADD node");
                     	builder.append(myPosition);
                     	builder.append(" ");
                     	builder.append(accessibleNode);
@@ -156,10 +170,15 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     for (Couple<Observation,String> o : observation) {
                     	Observation obs_names = o.getLeft();
                     	String obs_value = o.getRight();
+                    	
                     	if (obs_names == Observation.GOLD) {
+                    		Integer obs_value_parsed = Integer.parseInt(obs_value);
                     		tresor_saw = true;
                     		HashMap<String, Integer> d = this.ressources.get("Gold");
-                    		d.put(myPosition.toString(), Integer.parseInt(obs_value));
+                    		if (d.get(myPosition.toString()) == obs_value_parsed) {
+                    			continue;
+                    		}
+                    		d.put(myPosition.toString(), obs_value_parsed);
                     		StringBuilder builder = new StringBuilder("G");
                     		builder.append(accessibleNode.toString());
                     		builder.append(" ");
@@ -168,9 +187,13 @@ public class MyFSMBehaviour extends FSMBehaviour {
                         	this.knowledge.add(builder.toString());
                     	} 
                     	else if (obs_names == Observation.DIAMOND) {
+                    		Integer obs_value_parsed = Integer.parseInt(obs_value);
                     		tresor_saw = true;
                     		HashMap<String, Integer> d = this.ressources.get("Diamond");
-                    		d.put(myPosition.toString(), Integer.parseInt(obs_value));
+                    		if (d.get(myPosition.toString()) == obs_value_parsed) {
+                    			continue;
+                    		}
+                    		d.put(myPosition.toString(), obs_value_parsed);
                     		StringBuilder builder = new StringBuilder("D");
                     		builder.append(accessibleNode.toString());
                     		builder.append(" ");
@@ -193,11 +216,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
 					}
                 }
             }
-            try {
-                myAgent.doWait(500);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            true_wait(500);
             
             MessageTemplate template= MessageTemplate.and(
             MessageTemplate.MatchProtocol("ShareMap"),
@@ -239,7 +258,6 @@ public class MyFSMBehaviour extends FSMBehaviour {
             	}
             	String textMessage = msgr.getContent();
             	MyFSMBehaviour.parse_and_learnknowlege(textMessage, this.myMap, this.ressources);
-            	
             }
             exitValue = 1;
         }
@@ -263,11 +281,10 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private ArrayList<String> knowledge;
         private HashMap<String, Integer> last_talk_knowlege;
         private StringBuilder destination;
-        private Integer nb_blockage;
-        private Boolean try_solve_block;
+        private WrapperBlockage block_tool;
         private CurrentSelectedCoalition currentCoalition;
         
-    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, StringBuilder destination, Integer nb_blockage, Boolean try_solve_block, CurrentSelectedCoalition currentCoalition) {
+    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, StringBuilder destination, WrapperBlockage blockageTools, CurrentSelectedCoalition currentCoalition) {
     		super(myagent);
     		this.exitValue = 2;
     		this.tresor_location = tresor_location;
@@ -278,21 +295,28 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.last_talk_knowlege = last_talk_knowlege;
         	this.tresor_location = tresor_location;
         	this.destination = destination;
-        	this.nb_blockage = nb_blockage;
-        	this.try_solve_block = try_solve_block;
+        	this.block_tool = blockageTools;
         	this.currentCoalition = currentCoalition;
         }
         public void action() {
         	MapRepresentation map = this.myMap.getMyMap();
         	AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
         	Location myPosition = myAgent.getCurrentPosition();
-        	if (this.nb_blockage > 0 && this.try_solve_block) {
-        		this.nb_blockage -= 1;
-        		List<String> opennode = map.getOpenNodes();
-        		Random rand = new Random();
-            	int n = rand.nextInt(opennode.size());      
-            	this.destination.setLength(0);
-            	this.destination.append( map.getShortestPath(myPosition.getLocationId(), ""+opennode.get(n)).get(0));
+        	//System.out.println("BLOCK VALUE : "+ this.block_tool.try_solve_block() + " "+this.block_tool.nb_blockage());
+        	if (this.block_tool.nb_blockage() > 0 && this.block_tool.try_solve_block()) {
+        		this.block_tool.minus_nb_blockage(1);
+        		if(map.hasOpenNode()) {
+        			List<String> opennode = map.getOpenNodes();
+            		Random rand = new Random();
+                	int n = rand.nextInt(opennode.size());      
+                	this.destination.setLength(0);
+                	this.destination.append( map.getShortestPath(myPosition.getLocationId(), ""+opennode.get(n)).get(0));
+            		
+        		}else {
+        			Random rand = new Random();
+                	int n = rand.nextInt(map.getNodeCount());               	
+                	this.destination.append( map.getShortestPath(myPosition.getLocationId(), ""+n).get(0));
+        		}
         		return;
         	}
             
@@ -340,9 +364,8 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private ArrayList<String> knowledge;
         private HashMap<String, Integer> last_talk_knowlege;
         private StringBuilder destination;
-        private Integer nb_blockage;
-        private Boolean try_solve_blockage;
-        public MoveAndInterblockage (final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation myMap, List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, ArrayList<String> knowledge, StringBuilder destination, Integer nb_blockage, Boolean try_solve_blockage) {
+        private WrapperBlockage block_tool;
+        public MoveAndInterblockage (final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation myMap, List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, ArrayList<String> knowledge, StringBuilder destination, WrapperBlockage blockageTools) {
         	super(myagent);
         	this.ressources = ressources;
         	this.myMap = myMap;
@@ -350,25 +373,28 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.last_talk_knowlege = last_talk_knowlege;
         	this.list_agentNames = list_agentNames;
         	this.destination = destination;
-        	this.nb_blockage = nb_blockage;
-        	this.try_solve_blockage = try_solve_blockage;
+        	this.block_tool = blockageTools;
+ 
         }
         public void action() {
+        	
+        	//System.out.println("BLOCK 2 : "+this.block_tool.try_solve_block() + " "+this.block_tool.nb_blockage());
         	if (this.destination.length() != 0) {
-            	if (this.nb_blockage == 1) {
-                	try { myAgent.doWait(100); }
-                	catch (Exception e) { e.printStackTrace(); }
-                } else if (this.nb_blockage == 3) {
-                	this.try_solve_blockage = true;
+            	if (this.block_tool.nb_blockage() == 1) {
+                	true_wait(50);
+                } else if (this.block_tool.nb_blockage() == 3) {
+                	this.block_tool.set_try_solve_block(true);
                 	//sendInterBlockageNotification(this.destination.toString());
                 }
-                else if (this.nb_blockage == 0) {
-                	try_solve_blockage = false;
+                else if (this.block_tool.nb_blockage <= 0) {
+                	this.block_tool.try_solve_block = false;
+                	this.block_tool.nb_blockage = 0;
                 }
                 AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
-               	if (!myAgent.moveTo(new GsLocation(this.destination.toString())) ) {
-               		this.nb_blockage += 1;
+               	if (!myAgent.moveTo(new GsLocation(this.destination.toString())) && !this.block_tool.try_solve_block) {
+               		this.block_tool.nb_blockage += 1;
                	}
+               	
         	}
             this.exitValue = 3; // Continue back to OBSERVE state
         }
@@ -390,6 +416,18 @@ public class MyFSMBehaviour extends FSMBehaviour {
         @Override
         public int onEnd() {
             return this.exitValue;
+        }
+        public void true_wait(int millis) {
+        	AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
+        	Date currentDate = new Date();
+            long timestamp = currentDate.getTime();
+            while(new Date().getTime() - timestamp <= millis) {
+            	try {
+                    myAgent.doWait(millis);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
     private static String get_unknow_knowledge(MapRepresentation myMap, String agentname, ArrayList<String> knowledge, HashMap<String, Integer> last_talk_knowlege) {

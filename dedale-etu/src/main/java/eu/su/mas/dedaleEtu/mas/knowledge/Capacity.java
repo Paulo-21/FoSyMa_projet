@@ -1,5 +1,6 @@
 package eu.su.mas.dedaleEtu.mas.knowledge;
 
+import java.io.Serializable;
 import java.util.Set;
 
 import dataStructures.tuple.Couple;
@@ -7,7 +8,11 @@ import eu.su.mas.dedale.env.Observation;
 import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import jade.core.Agent;
 
-public class Capacity {
+public class Capacity implements Serializable {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -3595741522851796531L;
 	private int locking;
 	private int strenght; 
 	private int gold;
