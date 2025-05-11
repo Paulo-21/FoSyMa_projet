@@ -13,16 +13,19 @@ public class Coalition implements Serializable {
 	boolean confirmed;
 	int tot_locking;
 	int tot_strenght;
+	private Tresor tresor;
+	
 	ArrayList<String> agentsNames;
-	public Coalition(ArrayList<String> agentsNames, HashMap<String, AgentInfo> know_agent) {
+	public Coalition(ArrayList<String> agentsNames, HashMap<String, Capacity> know_agent) {
 		this.agentsNames = agentsNames;
 		this.tot_locking = 0;
 		this.tot_strenght = 0;
-		if(this.agentsNames.size() == 1) {
+		if(this.agentsNames.size() == 1 ) {
+			
 			this.confirmed = true;
 		}
 		for (String name : agentsNames) {
-			AgentInfo info = know_agent.get(name);
+			Capacity info = know_agent.get(name);
 			this.tot_locking += info.getLocking();
 			this.tot_strenght += info.getStrenght();
 		}
@@ -42,5 +45,11 @@ public class Coalition implements Serializable {
 	}
 	public boolean isConfirmed() {
 		return this.confirmed;
+	}
+	public void setTresor(Tresor t) {
+		this.tresor = t;
+	}
+	public Tresor getTresor() {
+		return this.tresor;
 	}
 }

@@ -19,6 +19,7 @@ import eu.su.mas.dedale.env.Observation;
 import eu.su.mas.dedale.env.gs.GsLocation;
 import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import eu.su.mas.dedaleEtu.mas.knowledge.AgentInfo;
+import eu.su.mas.dedaleEtu.mas.knowledge.BooleanWrapper;
 import eu.su.mas.dedaleEtu.mas.knowledge.Capacity;
 import eu.su.mas.dedaleEtu.mas.knowledge.Coalition;
 import eu.su.mas.dedaleEtu.mas.knowledge.CurrentSelectedCoalition;
@@ -26,6 +27,7 @@ import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation.MapAttribute;
 import eu.su.mas.dedaleEtu.mas.knowledge.SharedMapRepresentation;
 import eu.su.mas.dedaleEtu.mas.knowledge.Tresor;
+import eu.su.mas.dedaleEtu.mas.knowledge.WrapperBlockage;
 import eu.su.mas.dedaleEtu.mas.behaviours.ExploCoopBehaviour;
 
 import java.io.IOException;
@@ -35,6 +37,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.Vector;
 
 /**
@@ -55,7 +58,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
     private ArrayList<AgentInfo> knowAgents;
     private List<String> list_agentNames;
     private HashMap<String, HashMap<String, Integer>> ressources;
-    private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
+    private HashMap<String, Couple<Tresor, ArrayList<Coalition>>> tresor_location;
     private ArrayList<String> knowledge;
     private HashMap<String, Integer> last_talk_knowlege;
     private StringBuilder destination;
@@ -63,6 +66,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
     private Capacity myCap;
     private CurrentSelectedCoalition currentCoalition;
     private WrapperBlockage blockageTools;
+    private BooleanWrapper coalition_mode;
     
     public MyFSMBehaviour(final AbstractDedaleAgent myagent, MapRepresentation myMap, List<String> agentNames) {
         super(myagent);
@@ -73,17 +77,17 @@ public class MyFSMBehaviour extends FSMBehaviour {
         this.list_agentNames = agentNames;
         this.knowledge = new ArrayList<String>();
         this.last_talk_knowlege = new HashMap();
-        this.tresor_location = new HashMap();
+        this.tresor_location = new HashMap<String, Couple<Tresor, ArrayList<Coalition>>>();
         this.destination = new StringBuilder();
         this.myCap = new Capacity(myagent);
         this.currentCoalition = new CurrentSelectedCoalition();
         this.blockageTools = new WrapperBlockage(0, false);
-        
+        this.coalition_mode = new BooleanWrapper();
+       
         for (String name : agentNames) { this.last_talk_knowlege.put(name, -1); }
         
-        
         registerFirstState(new BroadCastBehaviour(myagent, this.last_talk_knowlege ,this.knowledge, this.sharedmyMap, this.ressources, this.list_agentNames, this.tresor_location, currentCoalition), STATE_OBSERVE);        
-        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location, destination,this.blockageTools, currentCoalition), STATE_OBJECTIF);
+        registerState(new GetObjectifs(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.tresor_location, destination,this.blockageTools, currentCoalition, this.coalition_mode), STATE_OBJECTIF);
         registerState(new MoveAndInterblockage(myagent, this.last_talk_knowlege, this.sharedmyMap, this.list_agentNames, this.ressources, this.knowledge, this.destination, this.blockageTools), STATE_EXPLORE);
 
         // Define state transitions
@@ -99,16 +103,17 @@ public class MyFSMBehaviour extends FSMBehaviour {
 		 */
 		private static final long serialVersionUID = 8120255717271441691L;
 
-		private int exitValue;
+		private int exitValue = 1;
         private List<String> list_agentNames;
         private HashMap<String, HashMap<String, Integer>> ressources;
         private SharedMapRepresentation myMap;
         private ArrayList<String> knowledge;
         private HashMap<String, Integer> last_talk_knowlege;
-        private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
+        private HashMap<String, Couple<Tresor, ArrayList<Coalition>>> tresor_location;
         private CurrentSelectedCoalition currentCoalition;
+        private HashMap<String, Capacity> agentsCap;
         
-        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, CurrentSelectedCoalition currentCoalition) {
+        public BroadCastBehaviour(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  ArrayList<String> knowledge,  SharedMapRepresentation map, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<String, Couple<Tresor, ArrayList<Coalition>>> tresor_location, CurrentSelectedCoalition currentCoalition) {
         	super(myagent);
         	this.ressources = ressources;
         	this.myMap = map;
@@ -117,6 +122,10 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.last_talk_knowlege = last_talk_knowlege;
         	this.tresor_location = tresor_location;
         	this.currentCoalition = currentCoalition;
+        	this.agentsCap = new HashMap<String, Capacity>();
+        	Capacity cap = new Capacity(this.myAgent);
+        	this.agentsCap.put(myagent.getName(), cap);
+        	
         }
         public void true_wait(int millis) {
         	AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
@@ -130,9 +139,17 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 }
             }
         }
+        
         public void action() {
         	//System.out.println("size know: "+this.knowledge.size());
+        	
             AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
+            Location myPosition = myAgent.getCurrentPosition();
+            if (myPosition == null) { return; }
+            if (myAgent.getLocalName().equals("C3")) {
+            	System.out.println(myPosition );
+            }
+            
             ACLMessage msg = new ACLMessage(ACLMessage.REQUEST);
     		msg.setProtocol("ShareMap");
     		msg.setSender(this.myAgent.getAID());
@@ -145,17 +162,20 @@ public class MyFSMBehaviour extends FSMBehaviour {
     		}
     		myAgent.sendMessage(msg);
     		MapRepresentation theMap = this.myMap.getMyMap();
-            Location myPosition = myAgent.getCurrentPosition();
-            if (myPosition != null) {
+            	
                 // Get the list of observable nodes from the current position
                 List<Couple<Location, List<Couple<Observation, String>>>> lobs = myAgent.observe();
-
+                
                 // 1️° Mark the current position as explored
                 theMap.addNode(myPosition.getLocationId(), MapAttribute.closed);
                 // 2️° Check surrounding nodes and update the map
                 String nextNodeId = null;
                 for (Couple<Location, List<Couple<Observation, String>>> couple : lobs) {
                     Location accessibleNode = couple.getLeft();
+                    boolean samepos = false;
+                    if(myPosition.toString().equals(accessibleNode.toString())) {
+                    	samepos = true;
+                	}
                     boolean tresor_saw = false;
                     boolean isNewNode = theMap.addNewNode(accessibleNode.getLocationId());
                     if (isNewNode) {
@@ -167,13 +187,20 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     	this.knowledge.add(builder.toString());
                     }
                     List<Couple<Observation, String>> observation = couple.getRight();
+                    int lock = 0;
+                    int gold = 0;
+                    int stren = 0;
+                    int diamond = 0;
+                    boolean islock = false;
                     for (Couple<Observation,String> o : observation) {
+                    	
                     	Observation obs_names = o.getLeft();
                     	String obs_value = o.getRight();
                     	
                     	if (obs_names == Observation.GOLD) {
                     		Integer obs_value_parsed = Integer.parseInt(obs_value);
                     		tresor_saw = true;
+                    		//System.out.println(obs_value);
                     		HashMap<String, Integer> d = this.ressources.get("Gold");
                     		if (d.get(myPosition.toString()) == obs_value_parsed) {
                     			continue;
@@ -185,10 +212,13 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     		builder.append(obs_value);
                     		builder.append(";");
                         	this.knowledge.add(builder.toString());
-                    	} 
+                        	gold = obs_value_parsed;
+                    	}
                     	else if (obs_names == Observation.DIAMOND) {
                     		Integer obs_value_parsed = Integer.parseInt(obs_value);
                     		tresor_saw = true;
+                    		//System.out.println(obs_value);
+                    		diamond = obs_value_parsed;
                     		HashMap<String, Integer> d = this.ressources.get("Diamond");
                     		if (d.get(myPosition.toString()) == obs_value_parsed) {
                     			continue;
@@ -201,11 +231,52 @@ public class MyFSMBehaviour extends FSMBehaviour {
                     		builder.append(";");
                         	this.knowledge.add(builder.toString());
                     	}
+                    	else if (obs_names == Observation.LOCKPICKING) {
+                    		lock = Integer.parseInt(obs_value);
+                    	}
+						else if (obs_names == Observation.STRENGH) {
+						    stren = Integer.parseInt(obs_value);
+						}
+						else if(obs_names == Observation.LOCKSTATUS) {
+							islock = Integer.parseInt(obs_value) == 1 ? true : false;
+							//System.out.println(islock+ " "+obs_value);
+						}
+						else if(obs_names == Observation.AGENTNAME && obs_value.contains("Tank")) {
+							myAgent.emptyMyBackPack(obs_value);
+						}
+                    }
+                    if (tresor_saw) {
+                    	System.out.println("TRESOR SAW ");
+                    	Tresor tresor = new Tresor(lock, stren, gold, diamond, islock);
+                    	ArrayList<Coalition> n = new ArrayList();
+                    	
+                    	tresor.print();
+                    	
+                    	this.agentsCap.get(this.myAgent.getName()).print();
+                    	if (tresor.is_capable(this.agentsCap.get(this.myAgent.getName())) ) {
+                    		System.out.println("YES im CAPABLE");
+                    		ArrayList<String> agentco = new ArrayList();
+                    		agentco.add(this.myAgent.getName());
+                    		Coalition c = new Coalition(agentco, this.agentsCap);
+                    		//c.setTresor(tresor);
+                    		n.add(c);
+                    	}
+                    	if (this.tresor_location.get(accessibleNode) == null) {
+                        	this.tresor_location.put(accessibleNode.toString(), new Couple<Tresor, ArrayList<Coalition>>(tresor, n));
+                    	}
+                    	else {
+                    		Couple<Tresor, ArrayList<Coalition>> couple1 = this.tresor_location.get(accessibleNode.toString());
+                    		Tresor t = couple1.getLeft();
+                    		t.setGold(gold);
+                    		t.setDiamond(diamond);
+                    		t.setIsOpen(islock);
+                    		
+                    	}
                     }
                     // Ensure we do not mark the current position as an edge node
                     if (!myPosition.getLocationId().equals(accessibleNode.getLocationId())) {
                     	theMap.addEdge(myPosition.getLocationId(), accessibleNode.getLocationId());
-
+                    	
                         // Select the first unexplored directly reachable node
                         if (nextNodeId == null && isNewNode) {
                             nextNodeId = accessibleNode.getLocationId();
@@ -215,8 +286,19 @@ public class MyFSMBehaviour extends FSMBehaviour {
 						this.tresor_location.remove(accessibleNode);
 					}
                 }
-            }
-            true_wait(500);
+                
+           if(this.currentCoalition.isActive() && this.currentCoalition.getTresorLocation().equals(myPosition.toString())) {
+        	   myAgent.openLock(Observation.ANY_TREASURE);
+               int res = myAgent.pick();
+               System.out.println("res of thresor "+res);
+               System.out.println(this.currentCoalition.getTresorLocation()+ " "+myPosition);
+               this.currentCoalition.setActive(false);        		
+           }
+           else if (this.tresor_location.get(myPosition.toString()) != null && /*!this.tresor_location.get(myPosition.toString()).getLeft().isOpen() &&*/ this.tresor_location.get(myPosition.toString()).getLeft().getLocking() <= this.agentsCap.get(myAgent.getName()).getLocking()) {
+        	   myAgent.openLock(Observation.ANY_TREASURE);
+           }
+           
+           true_wait(400);
             
             MessageTemplate template= MessageTemplate.and(
             MessageTemplate.MatchProtocol("ShareMap"),
@@ -242,11 +324,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
         		msgrespond.setContent(diff_knowledge);
         		((AbstractDedaleAgent)this.myAgent).sendMessage(msgrespond);
             }
-            try {
-                myAgent.doWait(50);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            true_wait(50);
             MessageTemplate template2= MessageTemplate.and(
                     MessageTemplate.MatchProtocol("ShareMap"),
                     MessageTemplate.MatchPerformative(ACLMessage.INFORM)
@@ -274,7 +352,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
 		 */
 		private static final long serialVersionUID = -6932897830993073426L;
 		int exitValue;
-		private HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location;
+		private HashMap<String, Couple<Tresor, ArrayList<Coalition>>> tresor_location;
 		private List<String> list_agentNames;
         private HashMap<String, HashMap<String, Integer>> ressources;
         private SharedMapRepresentation myMap;
@@ -283,8 +361,9 @@ public class MyFSMBehaviour extends FSMBehaviour {
         private StringBuilder destination;
         private WrapperBlockage block_tool;
         private CurrentSelectedCoalition currentCoalition;
+        private BooleanWrapper coalition_mode;
         
-    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<Location, Couple<Tresor, List<Coalition>>> tresor_location, StringBuilder destination, WrapperBlockage blockageTools, CurrentSelectedCoalition currentCoalition) {
+    	public GetObjectifs(final AbstractDedaleAgent myagent, HashMap<String, Integer> last_talk_knowlege,  SharedMapRepresentation sharedmyMap,  List<String> list_agentNames, HashMap<String, HashMap<String, Integer>> ressources, List<String> agentNames, HashMap<String, Couple<Tresor, ArrayList<Coalition>>> tresor_location, StringBuilder destination, WrapperBlockage blockageTools, CurrentSelectedCoalition currentCoalition, BooleanWrapper coalition_mode) {
     		super(myagent);
     		this.exitValue = 2;
     		this.tresor_location = tresor_location;
@@ -297,10 +376,16 @@ public class MyFSMBehaviour extends FSMBehaviour {
         	this.destination = destination;
         	this.block_tool = blockageTools;
         	this.currentCoalition = currentCoalition;
+        	this.coalition_mode = coalition_mode;
         }
         public void action() {
         	MapRepresentation map = this.myMap.getMyMap();
         	AbstractDedaleAgent myAgent = (AbstractDedaleAgent) this.myAgent;
+        	
+        	/*if(myAgent.getLocalName() == "Tank") {
+        		
+        	}*/
+
         	Location myPosition = myAgent.getCurrentPosition();
         	//System.out.println("BLOCK VALUE : "+ this.block_tool.try_solve_block() + " "+this.block_tool.nb_blockage());
         	if (this.block_tool.nb_blockage() > 0 && this.block_tool.try_solve_block()) {
@@ -311,8 +396,7 @@ public class MyFSMBehaviour extends FSMBehaviour {
                 	int n = rand.nextInt(opennode.size());      
                 	this.destination.setLength(0);
                 	this.destination.append( map.getShortestPath(myPosition.getLocationId(), ""+opennode.get(n)).get(0));
-            		
-        		}else {
+        		} else {
         			Random rand = new Random();
                 	int n = rand.nextInt(map.getNodeCount());               	
                 	this.destination.append( map.getShortestPath(myPosition.getLocationId(), ""+n).get(0));
@@ -324,20 +408,25 @@ public class MyFSMBehaviour extends FSMBehaviour {
             int current_surplus_cap = (int) Math.pow(2, 64);
             Coalition choosen_coalition = null;
             String choosen_location = null;
-            for (Location  k :  tresor_location.keySet()) {
-            	Couple <Tresor, List<Coalition>> tresor_tuple = tresor_location.get(k);
+            for (String  loca :  tresor_location.keySet()) {
+            	Couple <Tresor, ArrayList<Coalition>> tresor_tuple = tresor_location.get(loca);
             	Tresor t = tresor_tuple.getLeft();
             	List<Coalition> lc = tresor_tuple.getRight();
-            	int dist = map.getShortestPath(myPosition.toString(), k.toString()).size();
+            	int dist = map.getShortestPath(myPosition.toString(), loca).size();
             	for (Coalition coalition : lc) {
             		if (coalition.isConfirmed() && (coalition.getCoalitionSize() < current_coalition_size || (coalition.getCoalitionSize() == current_coalition_size && coalition.getSurplusCap(t) < current_surplus_cap))) {
-            			choosen_location = k.toString();
+            			choosen_location = loca;
             			choosen_coalition = coalition;
+            			this.currentCoalition.setActive(true);
+            			this.currentCoalition.setTresorLocation(choosen_location);
+            			System.out.println("COALITION CHOOSSEN");
+            			System.out.println(coalition.getCoalitionSize()+" "+coalition.getLocking());
             		}
             	}
             }
             if (choosen_location == null && map.hasOpenNode()) {
             	choosen_location = map.getShortestPathToClosestOpenNode(myPosition.getLocationId()).get(0);
+            	
             }
             this.destination.setLength(0);
             if (choosen_location != null) {// On prend le noeud d'un trésor ou d'un opend node

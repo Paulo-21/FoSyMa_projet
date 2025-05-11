@@ -17,10 +17,11 @@ public class Capacity implements Serializable {
 	private int strenght; 
 	private int gold;
 	private int diamond;
-	
+	private AbstractDedaleAgent myAgent;
 	public Capacity(Agent agent) {
 		AbstractDedaleAgent myAgent = (AbstractDedaleAgent) agent;
 		Set<Couple<Observation, Integer>> exp = myAgent.getMyExpertise();
+		this.myAgent = myAgent;
 		for (Couple<Observation, Integer> c : exp) {
 			Observation l = c.getLeft();
 			if (l == Observation.LOCKPICKING) {
@@ -28,12 +29,6 @@ public class Capacity implements Serializable {
 			}
 			else if (l == Observation.STRENGH) {
 				this.setStrenght(c.getRight());
-			}
-			else if (l == Observation.GOLD) {
-				this.setGold(c.getRight());
-			}
-			else if (l == Observation.DIAMOND) {
-				this.setDiamond(c.getRight());
 			}
 		}
 	}
@@ -45,9 +40,19 @@ public class Capacity implements Serializable {
 	public void setStrenght(int strenght) {
 		this.strenght = strenght;
 	}
-
+	public void update_capa() {
+		for (Couple<Observation, Integer> c : myAgent.getBackPackFreeSpace()) {
+			if(c.getLeft() == Observation.GOLD) {
+				this.gold = c.getRight();
+			}
+			else if(c.getLeft() == Observation.DIAMOND) {
+				this.diamond = c.getRight();
+			}
+		}
+	}
 	public int getDiamond() {
-		return diamond;
+		this.update_capa();
+		return this.diamond;
 	}
 
 	public void setDiamond(int diamond) {
@@ -55,6 +60,7 @@ public class Capacity implements Serializable {
 	}
 
 	public int getGold() {
+		this.update_capa();
 		return gold;
 	}
 
@@ -69,4 +75,22 @@ public class Capacity implements Serializable {
 	public void setLocking(int locking) {
 		this.locking = locking;
 	}
+	public void print() {
+		System.out.println("Cap : "+locking+" "+strenght+ " "+this.getGold()+" " +this.getDiamond());
+	}
 }
+
+/*public Capacity getCapacity(Set<Couple<Observation,Integer>> caps) {
+int lock = 0;
+int strenght = 0;
+for (Couple<Observation, Integer> c : caps) {
+	Observation obs = c.getLeft(); 
+	if (obs == Observation.LOCKPICKING) {
+		lock = c.getRight();
+	} else if ( obs == Observation.STRENGH){
+		strenght = c.getRight();
+	}
+}
+Capacity cap = new Capacity(lock, strenght);
+return cap;
+}*/
