@@ -7,10 +7,13 @@ public class CurrentSelectedCoalition implements Serializable {
 	 * 
 	 */
 	private static final long serialVersionUID = 1891334253780920295L;
-	private boolean exist;
+	private boolean activate;
 	private Coalition coalition;
-	public CurrentSelectedCoalition () {
-		
+	private String tresor_location;
+	public CurrentSelectedCoalition (/*String pos, Coalition c*/) {
+		/*this.tresor_location = pos;
+		this.coalition = c;
+		this.activate = false;*/
 	}
 	public Coalition getCoalition() {
 		return coalition;
@@ -18,11 +21,17 @@ public class CurrentSelectedCoalition implements Serializable {
 	public void setCoalition(Coalition coalition) {
 		this.coalition = coalition;
 	}
-	public boolean isExist() {
-		return exist;
+	public boolean isActive() {
+		return activate;
 	}
-	public void setExist(boolean exist) {
-		this.exist = exist;
+	public void setActive(boolean exist) {
+		this.activate = exist;
+	}
+	public void setTresorLocation(String loc) {
+		this.tresor_location = loc;
+	}
+	public String getTresorLocation() {
+		return this.tresor_location;
 	}
 	
 }
