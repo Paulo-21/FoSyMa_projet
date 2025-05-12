@@ -1,0 +1,90 @@
+[
+{ 
+  "agentType":"agentCollect",
+  "agentName": "C1",
+  "communicationRange": 3,
+  "initialLocation": "2",
+  "backPackCapacityGold": 10,
+  "backPackCapacityDiamond":0, 
+  "detectionRadius": 0,
+  "strengthExpertise": 1,
+  "lockPickingExpertise":1
+  },
+  { 
+  "agentType":"agentCollect",
+  "agentName": "C2",
+  "communicationRange": 2,
+  "initialLocation": "7",
+  "backPackCapacityGold": 0,
+  "backPackCapacityDiamond":25, 
+  "detectionRadius": 0,
+  "strengthExpertise": 2,
+  "lockPickingExpertise":0
+  },
+{ 
+  "agentType":"agentCollect",
+  "agentName": "C3",
+  "communicationRange": 4,
+  "initialLocation": "89",
+  "backPackCapacityGold": 45,
+  "backPackCapacityDiamond":0, 
+  "detectionRadius": 0,
+  "strengthExpertise": 4,
+  "lockPickingExpertise":4
+  },
+{ 
+  "agentType":"agentCollect",
+  "agentName": "C4",
+  "communicationRange": 3,
+  "initialLocation": "74",
+  "backPackCapacityGold": 0,
+  "backPackCapacityDiamond":15, 
+  "detectionRadius": 0,
+  "strengthExpertise": 4,
+  "lockPickingExpertise":4
+  },
+  { 
+  "agentType":"agentTanker",
+  "agentName": "Tank",
+  "communicationRange": 2,
+  "initialLocation": "88",
+  "backPackCapacityGold":400,
+  "backPackCapacityDiamond":0, 
+  "detectionRadius": 0,
+  "strengthExpertise": 2,
+  "lockPickingExpertise":1
+  },
+  { 
+  "agentType":"agentExplo",
+  "agentName": "E1",
+  "communicationRange": 2,
+  "initialLocation": "14",
+  "backPackCapacityGold": -1,
+  "backPackCapacityDiamond":-1, 
+  "detectionRadius": 0,
+  "strengthExpertise": 0,
+  "lockPickingExpertise":1
+  },
+{ 
+  "agentType":"wumpus",
+  "agentName": "G1",
+  "communicationRange": 2,
+  "initialLocation": "h40",
+  "backPackCapacityGold": 0,
+  "backPackCapacityDiamond":30, 
+  "detectionRadius": 1,
+  "strengthExpertise": 4,
+  "lockPickingExpertise":4
+  },
+{ 
+  "agentType":"wumpus",
+  "agentName": "G2",
+  "communicationRange": 2,
+  "initialLocation": "11",
+  "backPackCapacityGold": 20,
+  "backPackCapacityDiamond":0, 
+  "detectionRadius": 3,
+  "strengthExpertise": 3,
+  "lockPickingExpertise":3
+  }
+]
